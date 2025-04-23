@@ -1,6 +1,7 @@
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 import pickle
+import os
 
 def generate_dataset(N, w_input):
     return torch.randn(N, w_input)
@@ -15,6 +16,20 @@ def create_dataloader(N, w_input, batch_size):
     return dataloader, tensor_dataset
 
 if __name__=='__main__':
+    cwd = os.getcwd()
+    if cwd[:20] == '/Users/maxkerrwinter':
+        # Running on my laptop
+        base_path = '/Users/maxkerrwinter/Documents/python/'
+        proj_path = base_path
+        scratch_path = None
+        running_locally = True
+    else:
+        # Running on Snellius (or equiv.)
+        base_path = '/home/mkerrwinter/python/'
+        proj_path = '/home/mkerrwinter/link_project_space/python/'
+        scratch_path = '/scratch-shared/mkerrwinter/python/'
+        running_locally = False
+
     # Example usage
     N = 1000  # Number of vectors
     w_input = 4 # Length of vectors == input layer width
@@ -27,10 +42,10 @@ if __name__=='__main__':
     test_dataloader, test_dataset = create_dataloader(N, w_input, batch_size)
 
     # Save for later use
-    outpath = '/Users/maxkerrwinter/Documents/python/cyclicMemory/dataset/train_dataset.pkl'
+    outpath = '{}cyclicMemory/dataset/train_dataset.pkl'.format(proj_path)
     with open(outpath, 'wb') as outfile:
         pickle.dump(train_dataset, outfile)
 
-    outpath = '/Users/maxkerrwinter/Documents/python/cyclicMemory/dataset/test_dataset.pkl'
+    outpath = '{}cyclicMemory/dataset/test_dataset.pkl'.format(proj_path)
     with open(outpath, 'wb') as outfile:
         pickle.dump(test_dataset, outfile)

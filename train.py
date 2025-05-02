@@ -165,7 +165,7 @@ if __name__=='__main__':
                 }, outpath)
 
             # Save the loss plot
-            loss_plot_path = '{}plots/loss_w{}_d{}_rep{}.pdf'.format(proj_path, width, depth, rep)
+            loss_plot_path = '{}plots/{}/loss_w{}_d{}_rep{}.pdf'.format(proj_path, cpu_or_gpu, width, depth, rep)
             plt.figure(figsize=(12, 6))
             plt.plot(list(losses.keys()), list(losses.values()))
             plt.yscale('log')

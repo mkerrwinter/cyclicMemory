@@ -36,7 +36,7 @@ if __name__=='__main__':
     batch_size = 10
     train_dataloader, train_dataset = create_dataloader(N, w_input, batch_size)
 
-    N = 40  # Number of vectors
+    N = 100  # Number of vectors
     w_input = 4 # Length of vectors == input layer width
     batch_size = 10
     test_dataloader, test_dataset = create_dataloader(N, w_input, batch_size)

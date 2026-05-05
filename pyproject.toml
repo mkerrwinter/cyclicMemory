@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "cyclic-memory"
+version = "0.1.0"
+description = "Experiments training fully connected networks on random vector datasets."
+authors = []
+readme = "README.md"
+packages = [{ include = "cyclicMemory" }]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+torch = ">=2.0.0"
+pyyaml = ">=6.0"
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = ">=6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+

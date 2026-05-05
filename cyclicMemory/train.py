@@ -48,6 +48,20 @@ def load_datasets(data_dir: str = DATA_DIR):
     return train_ds, test_ds
 
 
+def make_quadratic_hinge_loss():
+    def quadratic_hinge(output, target):
+        Delta = 1.0 - target * output
+        zeros = torch.zeros_like(Delta)
+
+        max_Delta = torch.max(zeros, Delta)
+
+        sq_max_Delta = max_Delta * max_Delta
+
+        return 0.5 * torch.mean(sq_max_Delta)
+
+    return quadratic_hinge
+
+
 def train_one(cfg: dict, train_ds, test_ds) -> None:
     """Train a single model described by *cfg* using the provided datasets."""
 
@@ -68,7 +82,7 @@ def train_one(cfg: dict, train_ds, test_ds) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = FCNN(input_dim=cfg.get("input_dim", 10), width=cfg["width"]).to(device)
 
-    # ---- optimiser --------------------------------------------------------
+    # ---- optimiser and loss -----------------------------------------------
     optimiser = torch.optim.SGD(
         model.parameters(),
         lr=cfg["lr"],
@@ -76,9 +90,7 @@ def train_one(cfg: dict, train_ds, test_ds) -> None:
         weight_decay=cfg.get("weight_decay", 0.0),
     )
 
-    # Labels are +/-1 so we use hinge (margin) loss.
-    # MSELoss also works; keep it simple with MSE so loss is always defined.
-    loss_fn = nn.MSELoss()
+    loss_fn = make_quadratic_hinge_loss()
 
     # ---- output dirs ------------------------------------------------------
     results_dir = cfg.get("results_dir", "results")

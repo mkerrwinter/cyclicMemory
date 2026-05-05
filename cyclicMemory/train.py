@@ -17,11 +17,13 @@ import csv
 import os
 import time
 
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import yaml
 
+from dataset import RandomVectorDataset  # noqa: F401 — required for torch.load unpickling
 from model import FCNN
 
 
@@ -140,6 +142,28 @@ def train_one(cfg: dict, train_ds, test_ds) -> None:
     torch.save(model.state_dict(), ckpt_path)
     print(f"[{run_name}] Saved checkpoint → {ckpt_path}")
     print(f"[{run_name}] Training log   → {log_path}")
+
+    # ---- plot loss curves -------------------------------------------------
+    epochs, train_losses, test_losses = [], [], []
+    with open(log_path, newline="") as f:
+        for row in csv.DictReader(f):
+            epochs.append(int(row["epoch"]))
+            train_losses.append(float(row["train_loss"]))
+            test_losses.append(float(row["test_loss"]))
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.plot(epochs, train_losses, label="train loss")
+    ax.plot(epochs, test_losses,  label="test loss")
+    ax.set_yscale("log")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss (log scale)")
+    ax.set_title(run_name)
+    ax.legend()
+    fig.tight_layout()
+    plot_path = os.path.join(run_dir, "loss.pdf")
+    fig.savefig(plot_path)
+    plt.close(fig)
+    print(f"[{run_name}] Loss plot       → {plot_path}")
 
 
 # ---------------------------------------------------------------------------

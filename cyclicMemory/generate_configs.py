@@ -82,7 +82,7 @@ if __name__ == "__main__":
     parser.add_argument("--out_dir",      type=str,   default="configs")
     parser.add_argument("--widths",       type=int,   nargs="+", default=[64, 128, 256])
     parser.add_argument("--lrs",          type=float, nargs="+", default=[0.01, 0.001])
-    parser.add_argument("--batch_sizes",  type=int,   nargs="+", default=[32, 128])
+    parser.add_argument("--batch_sizes",  type=int,   nargs="+", default=[32])
     parser.add_argument("--n_repeats",    type=int,   default=5)
     parser.add_argument("--n_epochs",     type=int,   default=500)
     parser.add_argument("--log_every",    type=int,   default=10)

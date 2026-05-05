@@ -25,6 +25,7 @@ def generate_configs(
     widths:        list[int]   = (64, 128, 256),
     lrs:           list[float] = (0.01, 0.001),
     batch_sizes:   list[int]   = (32, 128),
+    n_repeats:     int         = 5,
     n_epochs:      int         = 500,
     log_every:     int         = 10,
     momentum:      float       = 0.0,
@@ -39,11 +40,11 @@ def generate_configs(
 ):
     os.makedirs(out_dir, exist_ok=True)
 
-    combos = list(itertools.product(widths, lrs, batch_sizes))
+    combos = list(itertools.product(widths, lrs, batch_sizes, range(n_repeats)))
     print(f"Generating {len(combos)} config file(s) in '{out_dir}/'")
 
-    for width, lr, batch_size in combos:
-        run_name = f"w{width}_lr{lr}_B{batch_size}"
+    for width, lr, batch_size, repeat in combos:
+        run_name = f"w{width}_lr{lr}_B{batch_size}_r{repeat}"
         cfg = {
             # Network
             "width":        width,
@@ -61,6 +62,9 @@ def generate_configs(
             "n_test":       n_test,
             "train_seed":   train_seed,
             "test_seed":    test_seed,
+            # Repeat / initialisation
+            "repeat":       repeat,
+            "init_seed":    repeat,  # each repeat gets a distinct init seed
             # Output
             "results_dir":  results_dir,
             "run_name":     run_name,
@@ -79,6 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("--widths",       type=int,   nargs="+", default=[64, 128, 256])
     parser.add_argument("--lrs",          type=float, nargs="+", default=[0.01, 0.001])
     parser.add_argument("--batch_sizes",  type=int,   nargs="+", default=[32, 128])
+    parser.add_argument("--n_repeats",    type=int,   default=5)
     parser.add_argument("--n_epochs",     type=int,   default=500)
     parser.add_argument("--log_every",    type=int,   default=10)
     parser.add_argument("--momentum",     type=float, default=0.0)
@@ -93,6 +98,7 @@ if __name__ == "__main__":
         widths       = args.widths,
         lrs          = args.lrs,
         batch_sizes  = args.batch_sizes,
+        n_repeats    = args.n_repeats,
         n_epochs     = args.n_epochs,
         log_every    = args.log_every,
         momentum     = args.momentum,

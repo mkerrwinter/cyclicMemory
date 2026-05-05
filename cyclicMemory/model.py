@@ -23,13 +23,13 @@ class FCNN(nn.Module):
     def __init__(self, input_dim: int = 10, width: int = 128):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, width),
+            nn.Linear(input_dim, width, bias=False),
             nn.ReLU(),
-            nn.Linear(width, width),
+            nn.Linear(width, width, bias=False),
             nn.ReLU(),
-            nn.Linear(width, width),
+            nn.Linear(width, width, bias=False),
             nn.ReLU(),
-            nn.Linear(width, 1),
+            nn.Linear(width, 1, bias=False),
         )
 
     def forward(self, x):

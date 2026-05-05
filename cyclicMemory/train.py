@@ -50,11 +50,15 @@ def train_one(cfg: dict, train_ds, test_ds) -> None:
     """Train a single model described by *cfg* using the provided datasets."""
 
     # ---- reproducibility --------------------------------------------------
-    torch.manual_seed(cfg.get("train_seed", 42))
+    # init_seed controls weight initialisation; train_seed controls data shuffling.
+    init_seed = cfg.get("init_seed", cfg.get("repeat", 0))
+    torch.manual_seed(init_seed)
 
     # ---- data -------------------------------------------------------------
     train_loader = DataLoader(
-        train_ds, batch_size=cfg["batch_size"], shuffle=True, drop_last=True
+        train_ds, batch_size=cfg["batch_size"], shuffle=True,
+        drop_last=True,
+        generator=torch.Generator().manual_seed(cfg.get("train_seed", 42)),
     )
     test_loader = DataLoader(test_ds, batch_size=512, shuffle=False)
 

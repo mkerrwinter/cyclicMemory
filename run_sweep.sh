@@ -5,15 +5,17 @@
 #   bash run_sweep.sh
 
 # ---- Edit these -----------------------------------------------------------
+# WIDTHS=(10 30 50)
 WIDTHS=(10)
-LRS=(0.01 0.001 0.0001)
+LRS=(0.01)
+DATASET="mnist"   # "random" or "mnist"
 # ---------------------------------------------------------------------------
 
 # Defaults (change here if needed)
 BATCH_SIZES=(32)
 N_REPEATS=1
-N_EPOCHS=100
-LOG_EVERY=10
+N_EPOCHS=10000
+LOG_EVERY=100
 N_TRAIN=5000
 N_TEST=1000
 INPUT_DIM=10
@@ -22,8 +24,9 @@ CONFIG_DIR="configs"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$SCRIPT_DIR/cyclicMemory"
+TEMP_CONFIG_DIR="$(mktemp -d)"
 
-echo "Generating configs..."
+echo "Generating configs into temporary directory: $TEMP_CONFIG_DIR"
 python "$CODE_DIR/generate_configs.py" \
     --widths       "${WIDTHS[@]}" \
     --lrs          "${LRS[@]}" \
@@ -35,9 +38,16 @@ python "$CODE_DIR/generate_configs.py" \
     --n_test       "$N_TEST" \
     --input_dim    "$INPUT_DIM" \
     --results_dir  "$RESULTS_DIR" \
-    --out_dir      "$CONFIG_DIR"
+    --dataset      "$DATASET" \
+    --out_dir      "$TEMP_CONFIG_DIR"
 
 echo ""
 echo "Starting training..."
-python "$CODE_DIR/train.py" --config_dir "$CONFIG_DIR"
+python "$CODE_DIR/train.py" --config_dir "$TEMP_CONFIG_DIR"
+
+echo ""
+echo "Moving configs to $CONFIG_DIR..."
+mkdir -p "$CONFIG_DIR"
+mv "$TEMP_CONFIG_DIR"/*.yaml "$CONFIG_DIR"/
+rmdir "$TEMP_CONFIG_DIR"
 

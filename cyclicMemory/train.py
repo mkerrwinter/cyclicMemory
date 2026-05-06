@@ -23,7 +23,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 import yaml
 
-from dataset import RandomVectorDataset  # noqa: F401 — required for torch.load unpickling
+from random_dataset import RandomVectorDataset      # noqa: F401 — required for torch.load unpickling
+from reduced_MNIST_dataset import ReducedMNISTDataset  # noqa: F401 — required for torch.load unpickling
 from model import FCNN
 
 
@@ -41,7 +42,7 @@ def load_datasets(data_dir: str = DATA_DIR):
     if not os.path.exists(train_path) or not os.path.exists(test_path):
         raise FileNotFoundError(
             f"Datasets not found in '{data_dir}'. "
-            "Please run `python dataset.py` first to generate and save them."
+            "Please run `python random_dataset.py` first to generate and save them."
         )
     train_ds = torch.load(train_path, weights_only=False)
     test_ds  = torch.load(test_path,  weights_only=False)
@@ -79,7 +80,8 @@ def train_one(cfg: dict, train_ds, test_ds) -> None:
     test_loader = DataLoader(test_ds, batch_size=512, shuffle=False)
 
     # ---- model ------------------------------------------------------------
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu") # Networks are small (~10k params) so CPU is faster because GPU has costly memory transfer overheads.
+    print(f"[{cfg.get('run_name', 'run')}] Using device: {device}")
     model = FCNN(input_dim=cfg.get("input_dim", 10), width=cfg["width"]).to(device)
 
     # ---- optimiser and loss -----------------------------------------------

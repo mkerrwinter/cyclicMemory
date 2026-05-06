@@ -35,17 +35,23 @@ def generate_configs(
     input_dim:     int         = 10,
     train_seed:    int         = 42,
     test_seed:     int         = 123,
+    dataset:       str         = "random",
     results_dir:   str         = "results",
     out_dir:       str         = "configs",
 ):
     os.makedirs(out_dir, exist_ok=True)
 
+    if dataset not in ("random", "mnist"):
+        raise ValueError(f"dataset must be 'random' or 'mnist', got '{dataset}'")
+
     combos = list(itertools.product(widths, lrs, batch_sizes, range(n_repeats)))
     print(f"Generating {len(combos)} config file(s) in '{out_dir}/'")
 
     for width, lr, batch_size, repeat in combos:
-        run_name = f"w{width}_lr{lr}_B{batch_size}_r{repeat}"
+        run_name = f"{dataset}_w{width}_lr{lr}_B{batch_size}_r{repeat}"
         cfg = {
+            # Dataset
+            "dataset":      dataset,
             # Network
             "width":        width,
             "input_dim":    input_dim,
@@ -92,6 +98,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_test",       type=int,   default=1000)
     parser.add_argument("--input_dim",    type=int,   default=10)
     parser.add_argument("--results_dir",  type=str,   default="results")
+    parser.add_argument("--dataset",      type=str,   default="random", choices=["random", "mnist"])
     args = parser.parse_args()
 
     generate_configs(
@@ -106,6 +113,7 @@ if __name__ == "__main__":
         n_train      = args.n_train,
         n_test       = args.n_test,
         input_dim    = args.input_dim,
+        dataset      = args.dataset,
         results_dir  = args.results_dir,
         out_dir      = args.out_dir,
     )

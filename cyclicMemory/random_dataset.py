@@ -1,5 +1,5 @@
 """
-dataset.py
+random_dataset.py
 ----------
 Generates and provides PyTorch Dataset objects of unit-norm Gaussian vectors
 with random +/-1 labels.

@@ -26,7 +26,7 @@ CODE_DIR="$SCRIPT_DIR/cyclicMemory"
 TEMP_CONFIG_DIR="$(mktemp -d)"
 
 echo "Generating configs into temporary directory: $TEMP_CONFIG_DIR"
-python "$CODE_DIR/generate_configs.py" \
+poetry run python "$CODE_DIR/generate_configs.py" \
     --widths       "${WIDTHS[@]}" \
     --lrs          "${LRS[@]}" \
     --batch_sizes  "${BATCH_SIZES[@]}" \

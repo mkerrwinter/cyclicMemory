@@ -5,14 +5,14 @@
 # Usage: bash run_sweep_slurm.sh
 
 # ---- Edit these -----------------------------------------------------------
-WIDTHS=(5 10)
+WIDTHS=(5 6 7 8 9 10)
 LRS=(0.01)
 DATASET="mnist"   # "random" or "mnist"
 # ---------------------------------------------------------------------------
 
 # Defaults
 BATCH_SIZES=(32)
-N_REPEATS=1
+N_REPEATS=10
 N_EPOCHS=10000
 LOG_EVERY=100
 N_TRAIN=5000

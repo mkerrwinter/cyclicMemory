@@ -141,8 +141,8 @@ def train_one(cfg: dict, train_ds, test_ds) -> None:
                 test_acc = t_correct / t_seen
 
                 elapsed = time.time() - t0
-                writer.writerow([epoch, f"{train_loss:.6f}", f"{train_acc:.4f}",
-                                  f"{test_loss:.6f}", f"{test_acc:.4f}", f"{elapsed:.1f}"])
+                writer.writerow([epoch, f"{train_loss:.12e}", f"{train_acc:.6f}",
+                                  f"{test_loss:.12e}", f"{test_acc:.6f}", f"{elapsed:.1f}"])
                 csv_file.flush()
                 print(
                     f"[{run_name}] epoch {epoch:>5}/{cfg['n_epochs']}  "

@@ -113,11 +113,64 @@ def plot_final_loss_vs_width(results_dir: str, out_path: str = None) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Plot: changed weights vs perturbation size
+# ---------------------------------------------------------------------------
+
+def plot_changed_weights_vs_perturbation(cyclic_dir: str, out_path: str = None) -> None:
+    """
+    Load all read_memory CSV files from a cyclic_memory/ directory and plot
+    the number of changed weights vs perturbation size on a single axes,
+    one coloured line per file (i.e. per number of write cycles).
+
+    Expected filename format (as written by read_write.read_memory):
+        read_memory_cycles{N:05d}_eps{epsilon:.2e}.csv
+    """
+    # Find all matching CSVs
+    pattern = re.compile(r"read_memory_cycles(\d+)_eps.+\.csv$")
+    entries = []
+    for fname in sorted(os.listdir(cyclic_dir)):
+        m = pattern.match(fname)
+        if m:
+            entries.append((int(m.group(1)), os.path.join(cyclic_dir, fname)))
+
+    if not entries:
+        print(f"No read_memory CSV files found in '{cyclic_dir}'.")
+        return
+
+    cmap = plt.cm.viridis
+    colours = [cmap(i / max(len(entries) - 1, 1)) for i in range(len(entries))]
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+
+    for (n_cycles, fpath), colour in zip(entries, colours):
+        perturbations, n_changed = [], []
+        with open(fpath, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                perturbations.append(float(row["perturbation_size"]))
+                n_changed.append(int(row["n_changed_weights"]))
+        ax.plot(perturbations, n_changed, color=colour, marker="o", markersize=4,
+                linewidth=1.5, label=f"{n_cycles} write cycles")
+
+    ax.set_xlabel("Perturbation size")
+    ax.set_ylabel("Number of changed weights")
+    ax.legend(fontsize=8, loc="best")
+    fig.tight_layout()
+
+    if out_path is None:
+        out_path = os.path.join(cyclic_dir, "changed_weights_vs_perturbation.pdf")
+    fig.savefig(out_path)
+    plt.close(fig)
+    print(f"Saved → {out_path}")
+
+
+# ---------------------------------------------------------------------------
 # Registry of available plots
 # ---------------------------------------------------------------------------
 
 PLOTS = {
-    "final_loss_vs_width": plot_final_loss_vs_width,
+    "final_loss_vs_width":              plot_final_loss_vs_width,
+    "changed_weights_vs_perturbation":  plot_changed_weights_vs_perturbation,
 }
 
 
@@ -138,16 +191,29 @@ if __name__ == "__main__":
         "--results_dir",
         type=str,
         default="results",
-        help="Path to the results directory produced by train.py",
+        help="Path to the results directory produced by train.py "
+             "(used by: final_loss_vs_width)",
+    )
+    parser.add_argument(
+        "--cyclic_dir",
+        type=str,
+        default=None,
+        help="Path to a cyclic_memory/ directory produced by read_write.py "
+             "(used by: changed_weights_vs_perturbation)",
     )
     parser.add_argument(
         "--out",
         type=str,
         default=None,
-        help="Output file path (default: results_dir/<plot_name>.pdf)",
+        help="Output file path (default: auto)",
     )
     args = parser.parse_args()
 
-    plot_fn = PLOTS[args.plot]
-    plot_fn(args.results_dir, args.out)
+    if args.plot == "changed_weights_vs_perturbation":
+        if args.cyclic_dir is None:
+            parser.error("--cyclic_dir is required for changed_weights_vs_perturbation")
+        plot_changed_weights_vs_perturbation(args.cyclic_dir, args.out)
+    else:
+        plot_fn = PLOTS[args.plot]
+        plot_fn(args.results_dir, args.out)
 

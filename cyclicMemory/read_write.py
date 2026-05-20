@@ -224,69 +224,233 @@ def write_memory(
 
 
 # ---------------------------------------------------------------------------
+# read_memory
+# ---------------------------------------------------------------------------
+
+def read_memory(
+    model_dir:        str,
+    n_write_cycles:   int,
+    max_perturbation: float,
+    epsilon:          float  = 1e-5,
+    dW:               float  = DEFAULT_DW,
+    lr:               float  = DEFAULT_LR,
+    n_gd_steps:       int    = DEFAULT_N_STEPS,
+    input_dim:        int    = 10,
+    width:            int    = 10,
+    data_dir:         str    = DATA_DIR,
+) -> None:
+    """
+    Read a memory from a network that has undergone cyclic write perturbations.
+
+    The checkpoint is loaded from:
+        <model_dir>/cyclic_memory/model_cycle{n_write_cycles:05d}.pt
+    i.e. one of the files written by write_memory's save_cycle.
+
+    For each perturbation size p = dW, 2*dW, ..., max_perturbation:
+      - Take a fresh copy of the original (written) network.
+      - Increment all weights by dW and run GD, repeated p/dW times.
+      - Decrement all weights by dW and run GD, repeated p/dW times.
+      - Count how many weights changed by more than `epsilon` relative to
+        the original network.
+
+    Saves a CSV of (perturbation_size, n_changed_weights) in the same
+    cyclic_memory directory, with the number of write cycles in the filename.
+
+    Parameters
+    ----------
+    model_dir        : base directory of the trained model (contains model.pt
+                       and the cyclic_memory/ subdirectory)
+    n_write_cycles   : number of write cycles — selects which checkpoint to load
+    max_perturbation : largest perturbation amplitude to probe
+    epsilon          : weight-change threshold for counting a weight as "changed"
+    dW               : single weight-perturbation step size
+    lr               : learning rate for full-batch GD
+    n_gd_steps       : number of GD steps after each ±dW nudge
+    input_dim        : input dimension of the network
+    width            : hidden layer width of the network
+    data_dir         : directory containing train_dataset.pt
+    """
+
+    device = torch.device("cpu")
+
+    # ---- resolve checkpoint path from model_dir + n_write_cycles -----------
+    model_path = os.path.join(
+        model_dir, "cyclic_memory", f"model_cycle{n_write_cycles:05d}.pt"
+    )
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"No checkpoint found at '{model_path}'. "
+            f"Has write_memory been run for {n_write_cycles} cycle(s)?"
+        )
+
+    # ---- data ---------------------------------------------------------------
+    print("Loading training data...")
+    X_all, y_all = _load_full_batch(data_dir, device)
+    print(f"  {X_all.shape[0]} samples, dim={X_all.shape[1]}")
+
+    # ---- load the written network as the fixed reference --------------------
+    original_model = FCNN(input_dim=input_dim, width=width).to(device)
+    state = torch.load(model_path, map_location=device, weights_only=True)
+    original_model.load_state_dict(state)
+    original_model.eval()
+    print(f"Loaded written network from: {model_path}")
+    print(f"  (network experienced {n_write_cycles} write cycle(s))")
+
+    # Flatten all original weights into a single reference vector
+    with torch.no_grad():
+        original_weights = torch.cat([p.detach().clone().flatten()
+                                      for p in original_model.parameters()])
+
+    loss_fn = make_quadratic_hinge_loss()
+
+    # ---- sweep over perturbation sizes --------------------------------------
+    n_steps_max = _n_steps_for(max_perturbation, dW)
+    perturbation_sizes = [round((k + 1) * dW, 12) for k in range(n_steps_max)]
+
+    print(
+        f"\nProbing {n_steps_max} perturbation size(s): "
+        f"dW={dW} up to max={max_perturbation}  (epsilon={epsilon})\n"
+    )
+
+    results = []   # list of (perturbation_size, n_changed)
+    t_total = time.time()
+
+    for k, p_size in enumerate(perturbation_sizes):
+        n_steps = k + 1   # number of ±dW increments for this amplitude
+
+        # Fresh copy of the written network for this probe
+        probe_model = FCNN(input_dim=input_dim, width=width).to(device)
+        probe_model.load_state_dict(copy.deepcopy(original_model.state_dict()))
+        optimiser = torch.optim.SGD(probe_model.parameters(), lr=lr, momentum=0.0)
+
+        # Upward sweep
+        for _ in range(n_steps):
+            _perturb(probe_model, +dW)
+            _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+
+        # Downward sweep
+        for _ in range(n_steps):
+            _perturb(probe_model, -dW)
+            _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+
+        # Count weights that changed by more than epsilon
+        with torch.no_grad():
+            probe_weights = torch.cat([p.detach().clone().flatten()
+                                       for p in probe_model.parameters()])
+            delta = (probe_weights - original_weights).abs()
+            n_changed = int((delta > epsilon).sum().item())
+
+        results.append((p_size, n_changed))
+        elapsed = time.time() - t_total
+        print(
+            f"  p={p_size:.4e}  (N={n_steps:>4} steps)  "
+            f"changed={n_changed}/{len(original_weights)}  "
+            f"({elapsed:.1f}s elapsed)"
+        )
+
+    # ---- save results -------------------------------------------------------
+    out_csv = os.path.join(
+        model_dir, "cyclic_memory",
+        f"read_memory_cycles{n_write_cycles:05d}_eps{epsilon:.2e}.csv",
+    )
+    import csv as _csv
+    with open(out_csv, "w", newline="") as f:
+        writer = _csv.writer(f)
+        writer.writerow(["perturbation_size", "n_changed_weights"])
+        writer.writerows(results)
+
+    print(f"\nRead-memory complete. Total time: {time.time() - t_total:.1f}s")
+    print(f"Results saved → {out_csv}")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Cyclically perturb a trained network's weights (write a memory)."
+        description="Write or read memories via cyclic weight perturbation."
     )
-    parser.add_argument(
-        "--model_path", type=str, default=DEFAULT_MODEL_PATH,
-        help="Path to model.pt checkpoint",
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # ---- shared arguments ---------------------------------------------------
+    def add_shared_args(p):
+        p.add_argument("--model_path", type=str, default=DEFAULT_MODEL_PATH,
+                       help="Path to model.pt checkpoint")
+        p.add_argument("--dW", type=float, default=DEFAULT_DW,
+                       help=f"Step size for each weight nudge (default: {DEFAULT_DW})")
+        p.add_argument("--lr", type=float, default=DEFAULT_LR,
+                       help=f"Learning rate for full-batch GD (default: {DEFAULT_LR})")
+        p.add_argument("--n_gd_steps", type=int, default=DEFAULT_N_STEPS,
+                       help=f"GD steps after each ±dW nudge (default: {DEFAULT_N_STEPS})")
+        p.add_argument("--input_dim", type=int, default=10,
+                       help="Input dimension of the network (default: 10)")
+        p.add_argument("--width", type=int, default=10,
+                       help="Hidden layer width (default: 10)")
+        p.add_argument("--data_dir", type=str, default=DATA_DIR,
+                       help="Directory containing train_dataset.pt")
+
+    # ---- write subcommand ---------------------------------------------------
+    p_write = subparsers.add_parser("write", help="Write a memory via cyclic perturbation")
+    add_shared_args(p_write)
+    p_write.add_argument(
+        "--perturbation", type=float, nargs="+", default=[2e-3], metavar="A",
+        help="Perturbation amplitude(s) per sub-cycle, e.g. 2e-3 or 2e-3 2e-3 3e-3",
     )
-    parser.add_argument(
-        "--perturbation", type=float, nargs="+", default=[2e-3],
-        metavar="A",
+    p_write.add_argument("--N_cycles",  type=int, default=10,
+                         help="Number of full write cycles (default: 10)")
+    p_write.add_argument("--save_freq", type=int, default=1,
+                         help="Save checkpoint every this many cycles (default: 1)")
+
+    # ---- read subcommand ----------------------------------------------------
+    p_read = subparsers.add_parser("read", help="Read a memory by probing weight sensitivity")
+    add_shared_args(p_read)
+    p_read.add_argument(
+        "--model_dir", type=str, required=True,
         help=(
-            "One or more perturbation amplitudes, e.g. --perturbation 2e-3  "
-            "or --perturbation 2e-3 2e-3 3e-3  (default: 2e-3)"
+            "Base directory of the trained model (the folder containing model.pt "
+            "and the cyclic_memory/ subdirectory written by the write command)"
         ),
     )
-    parser.add_argument(
-        "--dW", type=float, default=DEFAULT_DW,
-        help=f"Step size for each weight nudge (default: {DEFAULT_DW})",
+    p_read.add_argument(
+        "--n_write_cycles", type=int, required=True,
+        help="Number of write cycles — selects model_cycle{N:05d}.pt from cyclic_memory/",
     )
-    parser.add_argument(
-        "--lr", type=float, default=DEFAULT_LR,
-        help=f"Learning rate for full-batch GD (default: {DEFAULT_LR})",
+    p_read.add_argument(
+        "--max_perturbation", type=float, required=True,
+        help="Largest perturbation amplitude to probe",
     )
-    parser.add_argument(
-        "--n_gd_steps", type=int, default=DEFAULT_N_STEPS,
-        help=f"GD steps after each ±dW nudge (default: {DEFAULT_N_STEPS})",
+    p_read.add_argument(
+        "--epsilon", type=float, default=1e-5,
+        help="Weight-change threshold for counting a weight as changed (default: 1e-5)",
     )
-    parser.add_argument(
-        "--N_cycles", type=int, default=10,
-        help="Number of full write cycles (default: 10)",
-    )
-    parser.add_argument(
-        "--save_freq", type=int, default=1,
-        help="Save a checkpoint every this many cycles (default: 1)",
-    )
-    parser.add_argument(
-        "--input_dim", type=int, default=10,
-        help="Input dimension of the network (default: 10)",
-    )
-    parser.add_argument(
-        "--width", type=int, default=10,
-        help="Hidden layer width (default: 10)",
-    )
-    parser.add_argument(
-        "--data_dir", type=str, default=DATA_DIR,
-        help="Directory containing train_dataset.pt",
-    )
+
     args = parser.parse_args()
 
-    write_memory(
-        model_path   = args.model_path,
-        perturbation = args.perturbation,
-        dW           = args.dW,
-        lr           = args.lr,
-        n_gd_steps   = args.n_gd_steps,
-        N_cycles     = args.N_cycles,
-        save_freq    = args.save_freq,
-        input_dim    = args.input_dim,
-        width        = args.width,
-        data_dir     = args.data_dir,
-    )
+    if args.command == "write":
+        write_memory(
+            model_path   = args.model_path,
+            perturbation = args.perturbation,
+            dW           = args.dW,
+            lr           = args.lr,
+            n_gd_steps   = args.n_gd_steps,
+            N_cycles     = args.N_cycles,
+            save_freq    = args.save_freq,
+            input_dim    = args.input_dim,
+            width        = args.width,
+            data_dir     = args.data_dir,
+        )
+    elif args.command == "read":
+        read_memory(
+            model_dir        = args.model_dir,
+            n_write_cycles   = args.n_write_cycles,
+            max_perturbation = args.max_perturbation,
+            epsilon          = args.epsilon,
+            dW               = args.dW,
+            lr               = args.lr,
+            n_gd_steps       = args.n_gd_steps,
+            input_dim        = args.input_dim,
+            width            = args.width,
+            data_dir         = args.data_dir,
+        )
 

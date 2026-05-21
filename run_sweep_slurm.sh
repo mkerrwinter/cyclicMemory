@@ -18,7 +18,7 @@ LOG_EVERY=100
 N_TRAIN=5000
 N_TEST=1000
 INPUT_DIM=10
-RESULTS_DIR="results"
+RESULTS_DIR="snellius_results"
 CONFIG_DIR="configs"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -394,13 +394,13 @@ if __name__ == "__main__":
     p_write = subparsers.add_parser("write", help="Write a memory via cyclic perturbation")
     add_shared_args(p_write)
     p_write.add_argument(
-        "--perturbation", type=float, nargs="+", default=[2e-3], metavar="A",
+        "--perturbation", type=float, nargs="+", default=[1e-3], metavar="A",
         help="Perturbation amplitude(s) per sub-cycle, e.g. 2e-3 or 2e-3 2e-3 3e-3",
     )
-    p_write.add_argument("--N_cycles",  type=int, default=10,
-                         help="Number of full write cycles (default: 10)")
-    p_write.add_argument("--save_freq", type=int, default=1,
-                         help="Save checkpoint every this many cycles (default: 1)")
+    p_write.add_argument("--N_cycles",  type=int, default=1000,
+                         help="Number of full write cycles (default: 1000)")
+    p_write.add_argument("--save_freq", type=int, default=10,
+                         help="Save checkpoint every this many cycles (default: 10)")
 
     # ---- read subcommand ----------------------------------------------------
     p_read = subparsers.add_parser("read", help="Read a memory by probing weight sensitivity")

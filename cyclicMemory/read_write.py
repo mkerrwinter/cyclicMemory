@@ -333,14 +333,14 @@ def read_memory(
             _perturb(probe_model, -dW)
             _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
 
-        # Count weights that changed by more than epsilon
+        # Compute per-weight deltas and count changed weights
         with torch.no_grad():
             probe_weights = torch.cat([p.detach().clone().flatten()
                                        for p in probe_model.parameters()])
-            delta = (probe_weights - original_weights).abs()
-            n_changed = int((delta > epsilon).sum().item())
+            weight_deltas = (probe_weights - original_weights)          # signed
+            n_changed = int((weight_deltas.abs() > epsilon).sum().item())
 
-        results.append((p_size, n_changed))
+        results.append((p_size, n_changed, weight_deltas.tolist()))
         elapsed = time.time() - t_total
         print(
             f"  p={p_size:.4e}  (N={n_steps:>4} steps)  "
@@ -349,15 +349,18 @@ def read_memory(
         )
 
     # ---- save results -------------------------------------------------------
+    n_weights = len(original_weights)
     out_csv = os.path.join(
         model_dir, "cyclic_memory",
         f"read_memory_cycles{n_write_cycles:05d}_eps{epsilon:.2e}.csv",
     )
     import csv as _csv
+    header = ["perturbation_size", "n_changed_weights"] + [f"delta_weight_{i}" for i in range(n_weights)]
     with open(out_csv, "w", newline="") as f:
         writer = _csv.writer(f)
-        writer.writerow(["perturbation_size", "n_changed_weights"])
-        writer.writerows(results)
+        writer.writerow(header)
+        for p_size, n_changed, deltas in results:
+            writer.writerow([p_size, n_changed] + deltas)
 
     print(f"\nRead-memory complete. Total time: {time.time() - t_total:.1f}s")
     print(f"Results saved → {out_csv}")

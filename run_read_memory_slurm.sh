@@ -22,7 +22,7 @@ DATA_DIR="data"
 
 # SLURM resource settings
 PARTITION=fat_rome
-CPUS=4
+CPUS=16       # fat_rome minimum allocation; all 16 used as parallel probe workers
 MEM=8G
 TIME=24:00:00
 # ---------------------------------------------------------------------------
@@ -75,6 +75,7 @@ for CKPT in "${CHECKPOINTS[@]}"; do
             --n_gd_steps $N_GD_STEPS \
             --input_dim $INPUT_DIM \
             --width $WIDTH \
+            --n_workers $CPUS \
             --data_dir '$SCRIPT_DIR/$DATA_DIR'")
 
     echo "  Submitted job $JOB_ID → cycle $CYCLE_NUM  ($CKPT)"

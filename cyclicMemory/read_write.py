@@ -20,6 +20,7 @@ Usage
 import argparse
 import copy
 import math
+import multiprocessing as mp
 import os
 import time
 
@@ -224,6 +225,49 @@ def write_memory(
 
 
 # ---------------------------------------------------------------------------
+# read_memory — worker (module-level so multiprocessing can pickle it)
+# ---------------------------------------------------------------------------
+
+def _probe_worker(args: tuple) -> tuple:
+    """
+    Run a single read probe for perturbation amplitude (k+1)*dW.
+    Must be a module-level function so it is picklable by multiprocessing.
+
+    Each worker sets torch.set_num_threads(1) to avoid over-subscription when
+    many workers run in parallel.
+    """
+    (k, state_dict, original_weights,
+     dW, lr, n_gd_steps, input_dim, width, epsilon,
+     X_all, y_all) = args
+
+    torch.set_num_threads(1)   # one thread per worker; pool provides parallelism
+
+    n_steps = k + 1
+    p_size  = round((k + 1) * dW, 12)
+
+    probe_model = FCNN(input_dim=input_dim, width=width)
+    probe_model.load_state_dict(copy.deepcopy(state_dict))
+    optimiser = torch.optim.SGD(probe_model.parameters(), lr=lr, momentum=0.0)
+    loss_fn   = make_quadratic_hinge_loss()
+
+    for _ in range(n_steps):
+        _perturb(probe_model, +dW)
+        _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+
+    for _ in range(n_steps):
+        _perturb(probe_model, -dW)
+        _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+
+    with torch.no_grad():
+        probe_weights = torch.cat([p.detach().clone().flatten()
+                                   for p in probe_model.parameters()])
+        weight_deltas = probe_weights - original_weights
+        n_changed = int((weight_deltas.abs() > epsilon).sum().item())
+
+    return (k, p_size, n_changed, weight_deltas.tolist())
+
+
+# ---------------------------------------------------------------------------
 # read_memory
 # ---------------------------------------------------------------------------
 
@@ -238,6 +282,7 @@ def read_memory(
     input_dim:        int    = 10,
     width:            int    = 10,
     data_dir:         str    = DATA_DIR,
+    n_workers:        int    = 1,
 ) -> None:
     """
     Read a memory from a network that has undergone cyclic write perturbations.
@@ -252,6 +297,11 @@ def read_memory(
       - Decrement all weights by dW and run GD, repeated p/dW times.
       - Count how many weights changed by more than `epsilon` relative to
         the original network.
+
+    All perturbation-size probes are independent and are dispatched to
+    `n_workers` parallel processes via multiprocessing.Pool. Each worker
+    calls torch.set_num_threads(1) to avoid over-subscription; set
+    n_workers equal to the number of CPUs allocated to the job.
 
     Saves a CSV of (perturbation_size, n_changed_weights) in the same
     cyclic_memory directory, with the number of write cycles in the filename.
@@ -269,6 +319,7 @@ def read_memory(
     input_dim        : input dimension of the network
     width            : hidden layer width of the network
     data_dir         : directory containing train_dataset.pt
+    n_workers        : number of parallel worker processes (default: 1)
     """
 
     device = torch.device("cpu")
@@ -310,38 +361,37 @@ def read_memory(
     print(
         f"\nProbing {n_steps_max} perturbation size(s): "
         f"dW={dW} up to max={max_perturbation}  (epsilon={epsilon})\n"
+        f"Using {n_workers} parallel worker(s).\n"
     )
 
-    results = []   # list of (perturbation_size, n_changed)
+    # Build argument tuples — each probe is fully independent
+    worker_args = [
+        (k, original_model.state_dict(), original_weights,
+         dW, lr, n_gd_steps, input_dim, width, epsilon,
+         X_all, y_all)
+        for k in range(n_steps_max)
+    ]
+
     t_total = time.time()
+    actual_workers = min(n_workers, n_steps_max)
 
-    for k, p_size in enumerate(perturbation_sizes):
-        n_steps = k + 1   # number of ±dW increments for this amplitude
+    if actual_workers > 1:
+        # Parallel path: each worker uses 1 thread to avoid over-subscription
+        with mp.Pool(processes=actual_workers) as pool:
+            raw_results = pool.map(_probe_worker, worker_args)
+    else:
+        # Serial path (n_workers=1): run directly, no subprocess overhead
+        torch.set_num_threads(1)
+        raw_results = [_probe_worker(a) for a in worker_args]
 
-        # Fresh copy of the written network for this probe
-        probe_model = FCNN(input_dim=input_dim, width=width).to(device)
-        probe_model.load_state_dict(copy.deepcopy(original_model.state_dict()))
-        optimiser = torch.optim.SGD(probe_model.parameters(), lr=lr, momentum=0.0)
+    # pool.map preserves order, but sort by k defensively
+    raw_results.sort(key=lambda r: r[0])
 
-        # Upward sweep
-        for _ in range(n_steps):
-            _perturb(probe_model, +dW)
-            _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
-
-        # Downward sweep
-        for _ in range(n_steps):
-            _perturb(probe_model, -dW)
-            _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
-
-        # Compute per-weight deltas and count changed weights
-        with torch.no_grad():
-            probe_weights = torch.cat([p.detach().clone().flatten()
-                                       for p in probe_model.parameters()])
-            weight_deltas = (probe_weights - original_weights)          # signed
-            n_changed = int((weight_deltas.abs() > epsilon).sum().item())
-
-        results.append((p_size, n_changed, weight_deltas.tolist()))
+    results = []
+    for k, p_size, n_changed, deltas in raw_results:
+        results.append((p_size, n_changed, deltas))
         elapsed = time.time() - t_total
+        n_steps = k + 1
         print(
             f"  p={p_size:.4e}  (N={n_steps:>4} steps)  "
             f"changed={n_changed}/{len(original_weights)}  "
@@ -427,6 +477,14 @@ if __name__ == "__main__":
         "--epsilon", type=float, default=1e-5,
         help="Weight-change threshold for counting a weight as changed (default: 1e-5)",
     )
+    p_read.add_argument(
+        "--n_workers", type=int, default=1,
+        help=(
+            "Number of parallel worker processes for the perturbation sweep "
+            "(default: 1). Set to the number of CPUs allocated to your job "
+            "for maximum efficiency, e.g. 16 on fat_rome."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -455,5 +513,6 @@ if __name__ == "__main__":
             input_dim        = args.input_dim,
             width            = args.width,
             data_dir         = args.data_dir,
+            n_workers        = args.n_workers,
         )
 

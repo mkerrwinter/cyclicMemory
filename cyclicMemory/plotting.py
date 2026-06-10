@@ -16,6 +16,8 @@ from collections import defaultdict
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +144,7 @@ def plot_changed_weights_vs_perturbation(cyclic_dir: str, out_path: str = None) 
 
     fig, ax = plt.subplots(figsize=(7, 5))
 
+    handles = []
     for (n_cycles, fpath), colour in zip(entries, colours):
         perturbations, n_changed = [], []
         with open(fpath, newline="") as f:
@@ -149,12 +152,20 @@ def plot_changed_weights_vs_perturbation(cyclic_dir: str, out_path: str = None) 
             for row in reader:
                 perturbations.append(float(row["perturbation_size"]))
                 n_changed.append(int(row["n_changed_weights"]))
-        ax.plot(perturbations, n_changed, color=colour, marker="o", markersize=4,
-                linewidth=1.5, label=f"{n_cycles} write cycles")
+        line, = ax.plot(perturbations, n_changed, color=colour, marker="o", markersize=4,
+                        linewidth=1.5, label=f"{n_cycles} write cycles")
+        handles.append(line)
+
+    # If more than 5 lines, show only 5 evenly spaced entries in the legend
+    if len(handles) > 5:
+        indices = [round(i * (len(handles) - 1) / 4) for i in range(5)]
+        legend_handles = [handles[i] for i in indices]
+    else:
+        legend_handles = handles
 
     ax.set_xlabel("Perturbation size")
     ax.set_ylabel("Number of changed weights")
-    ax.legend(fontsize=8, loc="best")
+    ax.legend(handles=legend_handles, fontsize=8, loc="best")
     fig.tight_layout()
 
     if out_path is None:
@@ -178,14 +189,19 @@ PLOTS = {
 # Entry point
 # ---------------------------------------------------------------------------
 
+DEFAULT_CYCLIC_DIR = os.path.join(
+    "/Users/maxkerrwinter/Documents/python/cyclicMemory",
+    "snellius_results", "mnist_w10_lr0.01_B32_r0", "cyclic_memory",
+)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate plots from training results")
     parser.add_argument(
         "--plot",
         type=str,
-        required=True,
+        default="changed_weights_vs_perturbation",
         choices=list(PLOTS.keys()),
-        help="Which plot to make",
+        help="Which plot to make (default: changed_weights_vs_perturbation)",
     )
     parser.add_argument(
         "--results_dir",
@@ -197,23 +213,33 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cyclic_dir",
         type=str,
-        default=None,
+        default=DEFAULT_CYCLIC_DIR,
         help="Path to a cyclic_memory/ directory produced by read_write.py "
-             "(used by: changed_weights_vs_perturbation)",
+             "(used by: changed_weights_vs_perturbation) "
+             f"(default: {DEFAULT_CYCLIC_DIR})",
     )
     parser.add_argument(
         "--out",
         type=str,
         default=None,
-        help="Output file path (default: auto)",
+        help="Output file path (default: <cyclic_dir>/../plots/<plot>.pdf "
+             "for cyclic plots, or <results_dir>/<plot>.pdf otherwise)",
     )
     args = parser.parse_args()
 
+    # Resolve default output path
+    out = args.out
+    if out is None:
+        if args.plot == "changed_weights_vs_perturbation":
+            plots_dir = os.path.join(os.path.dirname(os.path.abspath(args.cyclic_dir)), "plots")
+        else:
+            plots_dir = os.path.join(os.path.abspath(args.results_dir), "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        out = os.path.join(plots_dir, f"{args.plot}.pdf")
+
     if args.plot == "changed_weights_vs_perturbation":
-        if args.cyclic_dir is None:
-            parser.error("--cyclic_dir is required for changed_weights_vs_perturbation")
-        plot_changed_weights_vs_perturbation(args.cyclic_dir, args.out)
+        plot_changed_weights_vs_perturbation(args.cyclic_dir, out)
     else:
         plot_fn = PLOTS[args.plot]
-        plot_fn(args.results_dir, args.out)
+        plot_fn(args.results_dir, out)
 

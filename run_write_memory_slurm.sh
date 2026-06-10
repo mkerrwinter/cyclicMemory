@@ -44,7 +44,7 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
     JOB_ID=$(sbatch --parsable \
         --job-name="$RUN_NAME" \
         --partition=fat_rome \
-        --cpus-per-task=4 \
+        --cpus-per-task=16 \
         --mem=8G \
         --time=24:00:00 \
         --output="$LOGS_DIR/${RUN_NAME}_%j.out" \

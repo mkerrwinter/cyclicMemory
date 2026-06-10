@@ -39,6 +39,9 @@ import torch.nn as nn
 # ---------------------------------------------------------------------------
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Must be called once before any parallel work starts
+torch.set_num_interop_threads(4)
+
 from model import FCNN
 from train import make_quadratic_hinge_loss
 
@@ -134,7 +137,6 @@ def benchmark(n_steps: int, warmup: int, data_dir: str) -> None:
 
     for n_threads in THREAD_COUNTS:
         torch.set_num_threads(n_threads)
-        torch.set_num_interop_threads(max(1, n_threads // 4))
 
         # ---- warmup (not timed) ----
         model_w = fresh_model(seed=1)

@@ -12,11 +12,11 @@ MODEL_DIRS=(
 )
 
 # Write parameters (defaults from read_write.py)
-PERTURBATION=(1e-3)   # perturbation amplitude(s), space-separated for multiple
+PERTURBATION=(5e-4 5e-4 5e-4 1e-3)   # perturbation amplitude(s), space-separated for multiple
 DW=1e-4
 LR=0.1
 N_GD_STEPS=2000
-N_CYCLES=1000
+N_CYCLES=100
 SAVE_FREQ=10
 INPUT_DIM=10
 WIDTH=10

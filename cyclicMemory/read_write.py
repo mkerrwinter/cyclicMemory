@@ -161,7 +161,8 @@ def write_memory(
 
     # ---- output directory ---------------------------------------------------
     model_dir  = os.path.dirname(os.path.abspath(model_path))
-    output_dir = os.path.join(model_dir, "cyclic_memory")
+    perturbation_str = "_".join(f"{A:.0e}" for A in perturbation)
+    output_dir = os.path.join(model_dir, "cyclic_memory_{}".format(perturbation_str))
     os.makedirs(output_dir, exist_ok=True)
     print(f"Checkpoints will be saved to: {output_dir}")
 
@@ -274,6 +275,7 @@ def _probe_worker(args: tuple) -> tuple:
 def read_memory(
     model_dir:        str,
     n_write_cycles:   int,
+    write_perturbation: list[float],
     max_perturbation: float,
     epsilon:          float  = 1e-5,
     dW:               float  = DEFAULT_DW,
@@ -311,6 +313,7 @@ def read_memory(
     model_dir        : base directory of the trained model (contains model.pt
                        and the cyclic_memory/ subdirectory)
     n_write_cycles   : number of write cycles — selects which checkpoint to load
+    write_perturbation : list of perturbation amplitudes used during writing
     max_perturbation : largest perturbation amplitude to probe
     epsilon          : weight-change threshold for counting a weight as "changed"
     dW               : single weight-perturbation step size
@@ -325,8 +328,9 @@ def read_memory(
     device = torch.device("cpu")
 
     # ---- resolve checkpoint path from model_dir + n_write_cycles -----------
+    perturbation_str = "_".join(f"{A:.0e}" for A in write_perturbation)
     model_path = os.path.join(
-        model_dir, "cyclic_memory", f"model_cycle{n_write_cycles:05d}.pt"
+        model_dir, "cyclic_memory_{}".format(perturbation_str), f"model_cycle{n_write_cycles:05d}.pt"
     )
     if not os.path.exists(model_path):
         raise FileNotFoundError(
@@ -470,6 +474,10 @@ if __name__ == "__main__":
         help="Number of write cycles — selects model_cycle{N:05d}.pt from cyclic_memory/",
     )
     p_read.add_argument(
+        "--write_perturbation", type=float, nargs="+", default=[1e-3], metavar="A",
+        help="Perturbation amplitude(s) per sub-cycle, e.g. 2e-3 or 2e-3 2e-3 3e-3",
+    )
+    p_read.add_argument(
         "--max_perturbation", type=float, required=True,
         help="Largest perturbation amplitude to probe",
     )
@@ -505,6 +513,7 @@ if __name__ == "__main__":
         read_memory(
             model_dir        = args.model_dir,
             n_write_cycles   = args.n_write_cycles,
+            write_perturbation= args.write_perturbation,  # used to resolve checkpoint path
             max_perturbation = args.max_perturbation,
             epsilon          = args.epsilon,
             dW               = args.dW,

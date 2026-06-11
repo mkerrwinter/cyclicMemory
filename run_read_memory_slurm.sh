@@ -12,6 +12,7 @@ MODEL_DIR="snellius_results/mnist_w10_lr0.01_B32_r0"
 
 # Read parameters (defaults from read_write.py unless you want to override)
 MAX_PERTURBATION=1.5e-3   # largest perturbation amplitude to probe
+WRITE_PERTURBATION=(5e-4 5e-4 5e-4 1e-3)   # perturbation amplitude(s), space-separated for multiple
 EPSILON=1e-5            # weight-change threshold to count a weight as "changed"
 DW=1e-4
 LR=0.1
@@ -68,6 +69,7 @@ for CKPT in "${CHECKPOINTS[@]}"; do
         --wrap="cd '$SCRIPT_DIR' && poetry run python '$CODE_DIR/read_write.py' read \
             --model_dir '$ABS_MODEL_DIR' \
             --n_write_cycles $CYCLE_NUM \
+            --write_perturbation ${WRITE_PERTURBATION[*]} \
             --max_perturbation $MAX_PERTURBATION \
             --epsilon $EPSILON \
             --dW $DW \

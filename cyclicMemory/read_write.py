@@ -329,8 +329,9 @@ def read_memory(
 
     # ---- resolve checkpoint path from model_dir + n_write_cycles -----------
     perturbation_str = "_".join(f"{A:.0e}" for A in write_perturbation)
+    memory_dir = os.path.join(model_dir, f"cyclic_memory_{perturbation_str}")
     model_path = os.path.join(
-        model_dir, "cyclic_memory_{}".format(perturbation_str), f"model_cycle{n_write_cycles:05d}.pt"
+        memory_dir, f"model_cycle{n_write_cycles:05d}.pt"
     )
     if not os.path.exists(model_path):
         raise FileNotFoundError(
@@ -404,8 +405,9 @@ def read_memory(
 
     # ---- save results -------------------------------------------------------
     n_weights = len(original_weights)
+    os.makedirs(memory_dir, exist_ok=True)
     out_csv = os.path.join(
-        model_dir, "cyclic_memory",
+        memory_dir,
         f"read_memory_cycles{n_write_cycles:05d}_eps{epsilon:.2e}.csv",
     )
     import csv as _csv

@@ -120,13 +120,17 @@ def plot_final_loss_vs_width(results_dir: str, out_path: str = None) -> None:
 
 def plot_changed_weights_vs_perturbation(cyclic_dir: str, out_path: str = None) -> None:
     """
-    Load all read_memory CSV files from a cyclic_memory/ directory and plot
+    Load all read_memory CSV files from a cyclic_memory_<perturbation>/ directory and plot
     the number of changed weights vs perturbation size on a single axes,
     one coloured line per file (i.e. per number of write cycles).
 
     Expected filename format (as written by read_write.read_memory):
         read_memory_cycles{N:05d}_eps{epsilon:.2e}.csv
     """
+    cyclic_dir = os.path.abspath(cyclic_dir)
+    if not os.path.isdir(cyclic_dir):
+        raise FileNotFoundError(f"No cyclic memory directory found at '{cyclic_dir}'.")
+
     # Find all matching CSVs
     pattern = re.compile(r"read_memory_cycles(\d+)_eps.+\.csv$")
     entries = []
@@ -191,7 +195,7 @@ PLOTS = {
 
 DEFAULT_CYCLIC_DIR = os.path.join(
     "/Users/maxkerrwinter/Documents/python/cyclicMemory",
-    "snellius_results", "mnist_w10_lr0.01_B32_r0", "cyclic_memory",
+    "snellius_results", "mnist_w10_lr0.01_B32_r0", "cyclic_memory_5e-04_5e-04_5e-04_1e-03",
 )
 
 if __name__ == "__main__":
@@ -214,7 +218,7 @@ if __name__ == "__main__":
         "--cyclic_dir",
         type=str,
         default=DEFAULT_CYCLIC_DIR,
-        help="Path to a cyclic_memory/ directory produced by read_write.py "
+        help="Path to a cyclic_memory_<perturbation>/ directory produced by read_write.py "
              "(used by: changed_weights_vs_perturbation) "
              f"(default: {DEFAULT_CYCLIC_DIR})",
     )

@@ -2,7 +2,8 @@
 # run_read_memory_slurm.sh
 # ------------------------
 # Submits one SLURM job per write-cycle checkpoint found in a model's
-# cyclic_memory/ directory, each running read_memory via read_write.py.
+# cyclic_memory_<WRITE_PERTURBATION>/ directory, each running read_memory via
+# read_write.py.
 #
 # Usage: bash run_read_memory_slurm.sh
 
@@ -31,7 +32,16 @@ TIME=24:00:00
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$SCRIPT_DIR/cyclicMemory"
 ABS_MODEL_DIR="$SCRIPT_DIR/$MODEL_DIR"
-CYCLIC_MEMORY_DIR="$ABS_MODEL_DIR/cyclic_memory"
+
+PERTURBATION_STR="$(python - "${WRITE_PERTURBATION[@]}" <<'PY'
+import sys
+
+values = [float(x) for x in sys.argv[1:]]
+print("_".join(f"{value:.0e}" for value in values))
+PY
+)"
+
+CYCLIC_MEMORY_DIR="$ABS_MODEL_DIR/cyclic_memory_${PERTURBATION_STR}"
 LOGS_DIR="$SCRIPT_DIR/slurm_logs"
 mkdir -p "$LOGS_DIR"
 
@@ -87,6 +97,7 @@ echo ""
 echo "All jobs submitted. Monitor with: squeue -u \$USER"
 echo "Logs in: $LOGS_DIR"
 echo ""
-echo "Results will be written to: $CYCLIC_MEMORY_DIR"
+echo "Checkpoint directory: $CYCLIC_MEMORY_DIR"
+echo "Results will be written to: $ABS_MODEL_DIR/cyclic_memory"
 echo "  Files: read_memory_cycles{N:05d}_eps${EPSILON}.csv"
 

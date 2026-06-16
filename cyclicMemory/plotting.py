@@ -131,6 +131,8 @@ def plot_changed_weights_vs_perturbation(cyclic_dir: str, out_path: str = None) 
     if not os.path.isdir(cyclic_dir):
         raise FileNotFoundError(f"No cyclic memory directory found at '{cyclic_dir}'.")
 
+    perturbation_str = os.path.basename(cyclic_dir)
+
     # Find all matching CSVs
     pattern = re.compile(r"read_memory_cycles(\d+)_eps.+\.csv$")
     entries = []
@@ -173,7 +175,7 @@ def plot_changed_weights_vs_perturbation(cyclic_dir: str, out_path: str = None) 
     fig.tight_layout()
 
     if out_path is None:
-        out_path = os.path.join(cyclic_dir, "changed_weights_vs_perturbation.pdf")
+        out_path = os.path.join(cyclic_dir, f"changed_weights_vs_perturbation_{perturbation_str}.pdf")
     fig.savefig(out_path)
     plt.close(fig)
     print(f"Saved → {out_path}")
@@ -197,6 +199,11 @@ DEFAULT_CYCLIC_DIR = os.path.join(
     "/Users/maxkerrwinter/Documents/python/cyclicMemory",
     "snellius_results", "mnist_w10_lr0.01_B32_r0", "cyclic_memory_5e-04_5e-04_5e-04_1e-03",
 )
+
+# DEFAULT_CYCLIC_DIR = os.path.join(
+#     "/Users/maxkerrwinter/Documents/python/cyclicMemory",
+#     "snellius_results", "mnist_w10_lr0.01_B32_r0", "cyclic_memory_1e-03",
+# )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate plots from training results")
@@ -236,10 +243,13 @@ if __name__ == "__main__":
     if out is None:
         if args.plot == "changed_weights_vs_perturbation":
             plots_dir = os.path.join(os.path.dirname(os.path.abspath(args.cyclic_dir)), "plots")
+            perturbation_str = os.path.basename(os.path.abspath(args.cyclic_dir))
+            out_name = f"{args.plot}_{perturbation_str}.pdf"
         else:
             plots_dir = os.path.join(os.path.abspath(args.results_dir), "plots")
+            out_name = f"{args.plot}.pdf"
         os.makedirs(plots_dir, exist_ok=True)
-        out = os.path.join(plots_dir, f"{args.plot}.pdf")
+        out = os.path.join(plots_dir, out_name)
 
     if args.plot == "changed_weights_vs_perturbation":
         plot_changed_weights_vs_perturbation(args.cyclic_dir, out)

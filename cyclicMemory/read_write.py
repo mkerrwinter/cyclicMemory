@@ -307,6 +307,8 @@ def read_memory(
 
     Saves a CSV of (perturbation_size, n_changed_weights) in the same
     cyclic_memory directory, with the number of write cycles in the filename.
+    Also saves the full delta-weight vectors in a separate CSV in the same
+    directory. The delta-weight filename does not include epsilon.
 
     Parameters
     ----------
@@ -411,15 +413,33 @@ def read_memory(
         f"read_memory_cycles{n_write_cycles:05d}_eps{epsilon:.2e}.csv",
     )
     import csv as _csv
-    header = ["perturbation_size", "n_changed_weights"] + [f"delta_weight_{i}" for i in range(n_weights)]
-    with open(out_csv, "w", newline="") as f:
+    summary_csv = os.path.join(
+        memory_dir,
+        f"read_memory_cycles{n_write_cycles:05d}_eps{epsilon:.2e}.csv",
+    )
+    delta_csv = os.path.join(
+        memory_dir,
+        f"read_memory_cycles{n_write_cycles:05d}_deltas.csv",
+    )
+
+    summary_header = ["perturbation_size", "n_changed_weights"]
+    delta_header = ["perturbation_size"] + [f"delta_weight_{i}" for i in range(n_weights)]
+
+    with open(summary_csv, "w", newline="") as f:
         writer = _csv.writer(f)
-        writer.writerow(header)
-        for p_size, n_changed, deltas in results:
-            writer.writerow([p_size, n_changed] + deltas)
+        writer.writerow(summary_header)
+        for p_size, n_changed, _deltas in results:
+            writer.writerow([p_size, n_changed])
+
+    with open(delta_csv, "w", newline="") as f:
+        writer = _csv.writer(f)
+        writer.writerow(delta_header)
+        for p_size, _n_changed, deltas in results:
+            writer.writerow([p_size] + deltas)
 
     print(f"\nRead-memory complete. Total time: {time.time() - t_total:.1f}s")
-    print(f"Results saved → {out_csv}")
+    print(f"Changed-weights results saved → {summary_csv}")
+    print(f"Delta-weights saved → {delta_csv}")
 
 
 # ---------------------------------------------------------------------------
@@ -526,4 +546,3 @@ if __name__ == "__main__":
             data_dir         = args.data_dir,
             n_workers        = args.n_workers,
         )
-

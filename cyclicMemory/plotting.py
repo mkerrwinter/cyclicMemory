@@ -276,7 +276,6 @@ def plot_average_changed_weights_vs_perturbation(
 
         line, = ax.plot(perturbations, mean, color=colour, marker="o", markersize=4,
                         linewidth=1.5, label=f"{n_cycles} write cycles")
-        ax.fill_between(perturbations, mean - std, mean + std, color=colour, alpha=0.2)
         handles.append(line)
 
     if len(handles) > 5:
@@ -286,7 +285,7 @@ def plot_average_changed_weights_vs_perturbation(
         legend_handles = handles
 
     ax.set_xlabel("Perturbation size")
-    ax.set_ylabel("Number of changed weights (mean ± std)")
+    ax.set_ylabel("Number of changed weights")
     ax.legend(handles=legend_handles, fontsize=8, loc="best")
     fig.tight_layout()
 
@@ -420,10 +419,12 @@ if __name__ == "__main__":
     # main()
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
+    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
+    eps = 5e-7
     plot_average_changed_weights_vs_perturbation(
         run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
-        repeats=[2, 3, 4, 5, 6, 7, 8],
-        perturbation_str="5e-04_5e-04_5e-04_1e-03",
-        out_path="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_5e-04_5e-04_5e-04_1e-03_eps1e-05.pdf",
-        epsilon=1e-5,
+        repeats=[0, 2, 3, 4, 5, 6, 7, 8],
+        perturbation_str=perturbation_string,
+        out_path="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_eps{}.pdf".format(perturbation_string, eps),
+        epsilon=eps,
     )

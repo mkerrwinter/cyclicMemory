@@ -119,6 +119,7 @@ def write_memory(
     n_gd_steps:   int    = DEFAULT_N_STEPS,
     N_cycles:     int    = 10,
     save_freq:    int    = 1,
+    start_cycle:  int    = 0,
     input_dim:    int    = 10,
     width:        int    = 10,
     data_dir:     str    = DATA_DIR,
@@ -128,7 +129,9 @@ def write_memory(
 
     Parameters
     ----------
-    model_path   : path to model.pt checkpoint to start from
+    model_path   : path to model.pt checkpoint to start from (used only when
+                   start_cycle=0; otherwise the checkpoint is auto-resolved
+                   from the cyclic_memory directory)
     perturbation : list of amplitudes, e.g. [2e-3] or [2e-3, 2e-3, 3e-3].
                    For each amplitude A in the list, one "sub-cycle" consists
                    of A/dW increments of +dW (each followed by GD) then A/dW
@@ -136,14 +139,26 @@ def write_memory(
     dW           : single weight-perturbation step size
     lr           : learning rate for the full-batch GD routine
     n_gd_steps   : number of GD steps after each ±dW nudge
-    N_cycles     : total number of full cycles to run
-    save_freq    : save the model every this many cycles (also saves at cycle 0)
+    N_cycles     : number of additional cycles to run from start_cycle
+    save_freq    : save the model every this many cycles (also saves at cycle 0
+                   when start_cycle=0)
+    start_cycle  : resume from this cycle number (default: 0 = fresh start).
+                   When > 0, loads model_cycle{start_cycle:05d}.pt from the
+                   cyclic_memory directory instead of model_path, and cycle
+                   numbering continues from start_cycle+1.
     input_dim    : input dimension of the network
     width        : hidden layer width of the network
     data_dir     : directory containing train_dataset.pt
     """
 
     device = torch.device("cpu")
+
+    # ---- output directory (needed before model load when resuming) ----------
+    model_dir  = os.path.dirname(os.path.abspath(model_path))
+    perturbation_str = "_".join(f"{A:.0e}" for A in perturbation)
+    output_dir = os.path.join(model_dir, "cyclic_memory_{}".format(perturbation_str))
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Checkpoints will be saved to: {output_dir}")
 
     # ---- data ---------------------------------------------------------------
     print("Loading training data...")
@@ -152,19 +167,24 @@ def write_memory(
 
     # ---- model --------------------------------------------------------------
     model = FCNN(input_dim=input_dim, width=width).to(device)
-    state = torch.load(model_path, map_location=device, weights_only=True)
-    model.load_state_dict(state)
-    print(f"Loaded model from: {model_path}")
+
+    if start_cycle > 0:
+        resume_path = os.path.join(output_dir, f"model_cycle{start_cycle:05d}.pt")
+        if not os.path.exists(resume_path):
+            raise FileNotFoundError(
+                f"No checkpoint found at '{resume_path}'. "
+                f"Has write_memory been run for {start_cycle} cycle(s)?"
+            )
+        state = torch.load(resume_path, map_location=device, weights_only=True)
+        model.load_state_dict(state)
+        print(f"Resuming from checkpoint: {resume_path}")
+    else:
+        state = torch.load(model_path, map_location=device, weights_only=True)
+        model.load_state_dict(state)
+        print(f"Loaded model from: {model_path}")
 
     loss_fn   = make_quadratic_hinge_loss()
     optimiser = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.0)
-
-    # ---- output directory ---------------------------------------------------
-    model_dir  = os.path.dirname(os.path.abspath(model_path))
-    perturbation_str = "_".join(f"{A:.0e}" for A in perturbation)
-    output_dir = os.path.join(model_dir, "cyclic_memory_{}".format(perturbation_str))
-    os.makedirs(output_dir, exist_ok=True)
-    print(f"Checkpoints will be saved to: {output_dir}")
 
     # ---- pre-compute step counts for each amplitude -------------------------
     steps_per_amplitude = [_n_steps_for(A, dW) for A in perturbation]
@@ -172,25 +192,30 @@ def write_memory(
         f"\nPerturbation schedule: {perturbation}  "
         f"(dW={dW}, steps={steps_per_amplitude})"
     )
-    print(f"GD steps per nudge: {n_gd_steps}  |  Cycles: {N_cycles}  |  Save every: {save_freq}\n")
+    print(
+        f"GD steps per nudge: {n_gd_steps}  |  Cycles: {N_cycles}  "
+        f"|  Start cycle: {start_cycle}  |  Save every: {save_freq}\n"
+    )
 
     # ---- initial loss & save ------------------------------------------------
     model.eval()
     with torch.no_grad():
         initial_loss = loss_fn(model(X_all), y_all).item()
-    print(f"Initial loss: {initial_loss:.6e}")
+    print(f"Loss at cycle {start_cycle}: {initial_loss:.6e}")
 
     def save_cycle(cycle_num: int) -> None:
         fname = os.path.join(output_dir, f"model_cycle{cycle_num:05d}.pt")
         torch.save(model.state_dict(), fname)
         print(f"  [cycle {cycle_num}] Checkpoint saved → {fname}")
 
-    save_cycle(0)
+    if start_cycle == 0:
+        save_cycle(0)
 
     # ---- main loop ----------------------------------------------------------
     t_total = time.time()
+    end_cycle = start_cycle + N_cycles
 
-    for cycle in range(1, N_cycles + 1):
+    for cycle in range(start_cycle + 1, end_cycle + 1):
         t_cycle = time.time()
 
         for amp_idx, (amplitude, n_w_steps) in enumerate(
@@ -214,7 +239,7 @@ def write_memory(
         elapsed_cycle = time.time() - t_cycle
         elapsed_total = time.time() - t_total
         print(
-            f"Cycle {cycle:>4}/{N_cycles}  loss={cycle_loss:.6e}  "
+            f"Cycle {cycle:>4}/{end_cycle}  loss={cycle_loss:.6e}  "
             f"({elapsed_cycle:.1f}s/cycle, {elapsed_total:.1f}s total)"
         )
 
@@ -480,6 +505,12 @@ if __name__ == "__main__":
                          help="Number of full write cycles (default: 1000)")
     p_write.add_argument("--save_freq", type=int, default=10,
                          help="Save checkpoint every this many cycles (default: 10)")
+    p_write.add_argument("--start_cycle", type=int, default=0,
+                         help=(
+                             "Resume from this cycle number (default: 0 = fresh start). "
+                             "When > 0, loads model_cycle{N:05d}.pt from the cyclic_memory "
+                             "directory and continues numbering from there."
+                         ))
 
     # ---- read subcommand ----------------------------------------------------
     p_read = subparsers.add_parser("read", help="Read a memory by probing weight sensitivity")
@@ -527,6 +558,7 @@ if __name__ == "__main__":
             n_gd_steps   = args.n_gd_steps,
             N_cycles     = args.N_cycles,
             save_freq    = args.save_freq,
+            start_cycle  = args.start_cycle,
             input_dim    = args.input_dim,
             width        = args.width,
             data_dir     = args.data_dir,

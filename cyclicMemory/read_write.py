@@ -75,12 +75,21 @@ def _gd_step(
     X: torch.Tensor,
     y: torch.Tensor,
     n_steps: int,
+    label_noise_std: float = 0.0,
 ) -> float:
-    """Run `n_steps` of full-batch GD; return final loss."""
+    """Run `n_steps` of full-batch GD; return final loss.
+
+    If label_noise_std > 0, a single Gaussian noise vector (mean=0,
+    std=label_noise_std) is sampled once per call and added to y for all
+    n_steps inner iterations — i.e. the noise changes once per dW step.
+    """
+    y_train = y
+    if label_noise_std > 0.0:
+        y_train = y + torch.randn_like(y) * label_noise_std
     for _ in range(n_steps):
         model.train()
         optimiser.zero_grad()
-        loss = loss_fn(model(X), y)
+        loss = loss_fn(model(X), y_train)
         loss.backward()
         optimiser.step()
     model.eval()
@@ -112,17 +121,18 @@ def _n_steps_for(amplitude: float, dW: float) -> int:
 # ---------------------------------------------------------------------------
 
 def write_memory(
-    model_path:   str,
-    perturbation: list[float],
-    dW:           float  = DEFAULT_DW,
-    lr:           float  = DEFAULT_LR,
-    n_gd_steps:   int    = DEFAULT_N_STEPS,
-    N_cycles:     int    = 10,
-    save_freq:    int    = 1,
-    start_cycle:  int    = 0,
-    input_dim:    int    = 10,
-    width:        int    = 10,
-    data_dir:     str    = DATA_DIR,
+    model_path:       str,
+    perturbation:     list[float],
+    dW:               float  = DEFAULT_DW,
+    lr:               float  = DEFAULT_LR,
+    n_gd_steps:       int    = DEFAULT_N_STEPS,
+    N_cycles:         int    = 10,
+    save_freq:        int    = 1,
+    start_cycle:      int    = 0,
+    label_noise_std:  float  = 0.0,
+    input_dim:        int    = 10,
+    width:            int    = 10,
+    data_dir:         str    = DATA_DIR,
 ) -> None:
     """
     Write a memory by cyclically perturbing the weights of a trained network.
@@ -146,6 +156,10 @@ def write_memory(
                    When > 0, loads model_cycle{start_cycle:05d}.pt from the
                    cyclic_memory directory instead of model_path, and cycle
                    numbering continues from start_cycle+1.
+    label_noise_std : standard deviation of Gaussian noise added to labels
+                   during each GD call (default: 0.0 = no noise). A fresh
+                   noise vector is sampled once per dW step (i.e. per call
+                   to _gd_step), so the noise changes each perturbation step.
     input_dim    : input dimension of the network
     width        : hidden layer width of the network
     data_dir     : directory containing train_dataset.pt
@@ -156,7 +170,8 @@ def write_memory(
     # ---- output directory (needed before model load when resuming) ----------
     model_dir  = os.path.dirname(os.path.abspath(model_path))
     perturbation_str = "_".join(f"{A:.0e}" for A in perturbation)
-    output_dir = os.path.join(model_dir, "cyclic_memory_{}".format(perturbation_str))
+    dir_suffix = perturbation_str if label_noise_std == 0.0 else f"{perturbation_str}_noise{label_noise_std:.0e}"
+    output_dir = os.path.join(model_dir, f"cyclic_memory_{dir_suffix}")
     os.makedirs(output_dir, exist_ok=True)
     print(f"Checkpoints will be saved to: {output_dir}")
 
@@ -224,12 +239,12 @@ def write_memory(
             # --- upward sweep (+dW × n_w_steps) ---
             for step in range(n_w_steps):
                 _perturb(model, +dW)
-                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std)
 
             # --- downward sweep (-dW × n_w_steps) ---
             for step in range(n_w_steps):
                 _perturb(model, -dW)
-                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std)
 
         # ---- end-of-cycle bookkeeping ---------------------------------------
         model.eval()
@@ -306,6 +321,7 @@ def read_memory(
     dW:               float  = DEFAULT_DW,
     lr:               float  = DEFAULT_LR,
     n_gd_steps:       int    = DEFAULT_N_STEPS,
+    label_noise_std:  float  = 0.0,
     input_dim:        int    = 10,
     width:            int    = 10,
     data_dir:         str    = DATA_DIR,
@@ -356,7 +372,8 @@ def read_memory(
 
     # ---- resolve checkpoint path from model_dir + n_write_cycles -----------
     perturbation_str = "_".join(f"{A:.0e}" for A in write_perturbation)
-    memory_dir = os.path.join(model_dir, f"cyclic_memory_{perturbation_str}")
+    dir_suffix = perturbation_str if label_noise_std == 0.0 else f"{perturbation_str}_noise{label_noise_std:.0e}"
+    memory_dir = os.path.join(model_dir, f"cyclic_memory_{dir_suffix}")
     model_path = os.path.join(
         memory_dir, f"model_cycle{n_write_cycles:05d}.pt"
     )
@@ -511,6 +528,12 @@ if __name__ == "__main__":
                              "When > 0, loads model_cycle{N:05d}.pt from the cyclic_memory "
                              "directory and continues numbering from there."
                          ))
+    p_write.add_argument("--label_noise_std", type=float, default=0.0,
+                         help=(
+                             "Standard deviation of Gaussian label noise added during each "
+                             "GD call (default: 0.0 = no noise). A fresh noise vector is "
+                             "sampled once per dW step."
+                         ))
 
     # ---- read subcommand ----------------------------------------------------
     p_read = subparsers.add_parser("read", help="Read a memory by probing weight sensitivity")
@@ -546,6 +569,11 @@ if __name__ == "__main__":
             "for maximum efficiency, e.g. 16 on fat_rome."
         ),
     )
+    p_read.add_argument("--label_noise_std", type=float, default=0.0,
+                        help=(
+                            "Label noise std used during writing — used to resolve the "
+                            "correct cyclic_memory directory (default: 0.0)."
+                        ))
 
     args = parser.parse_args()
 
@@ -559,6 +587,7 @@ if __name__ == "__main__":
             N_cycles     = args.N_cycles,
             save_freq    = args.save_freq,
             start_cycle  = args.start_cycle,
+            label_noise_std = args.label_noise_std,
             input_dim    = args.input_dim,
             width        = args.width,
             data_dir     = args.data_dir,
@@ -567,12 +596,13 @@ if __name__ == "__main__":
         read_memory(
             model_dir        = args.model_dir,
             n_write_cycles   = args.n_write_cycles,
-            write_perturbation= args.write_perturbation,  # used to resolve checkpoint path
+            write_perturbation= args.write_perturbation,
             max_perturbation = args.max_perturbation,
             epsilon          = args.epsilon,
             dW               = args.dW,
             lr               = args.lr,
             n_gd_steps       = args.n_gd_steps,
+            label_noise_std  = args.label_noise_std,
             input_dim        = args.input_dim,
             width            = args.width,
             data_dir         = args.data_dir,

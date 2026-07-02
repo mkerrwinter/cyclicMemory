@@ -9,10 +9,17 @@
 # List the model directories (each should contain a model.pt file)
 MODEL_DIRS=(
     "snellius_results/mnist_w10_lr0.01_B32_r0"
+    "snellius_results/mnist_w10_lr0.01_B32_r2"
+    "snellius_results/mnist_w10_lr0.01_B32_r3"
+    "snellius_results/mnist_w10_lr0.01_B32_r4"
+    "snellius_results/mnist_w10_lr0.01_B32_r5"
+    "snellius_results/mnist_w10_lr0.01_B32_r6"
+    "snellius_results/mnist_w10_lr0.01_B32_r7"
+    "snellius_results/mnist_w10_lr0.01_B32_r8"
 )
 
 # Write parameters (defaults from read_write.py)
-PERTURBATION=(5e-4 5e-4 5e-4 1e-3)   # perturbation amplitude(s), space-separated for multiple
+PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4)   # perturbation amplitude(s), space-separated for multiple
 DW=1e-4
 LR=0.1
 N_GD_STEPS=2000

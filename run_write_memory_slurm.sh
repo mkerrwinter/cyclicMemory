@@ -22,6 +22,7 @@ INPUT_DIM=10
 WIDTH=10
 DATA_DIR="data"
 START_CYCLE=0
+LABEL_NOISE_STD=1e-7
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,6 +58,8 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
             --lr $LR \
             --n_gd_steps $N_GD_STEPS \
             --N_cycles $N_CYCLES \
+            --start_cycle $START_CYCLE \
+            --label_noise_std $LABEL_NOISE_STD \
             --save_freq $SAVE_FREQ \
             --input_dim $INPUT_DIM \
             --width $WIDTH \

@@ -34,15 +34,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$SCRIPT_DIR/cyclicMemory"
 ABS_MODEL_DIR="$SCRIPT_DIR/$MODEL_DIR"
 
-PERTURBATION_STR="$(python - "${WRITE_PERTURBATION[@]}" <<'PY'
+DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "${WRITE_PERTURBATION[@]}" <<'PY'
 import sys
 
-values = [float(x) for x in sys.argv[1:]]
-print("_".join(f"{value:.0e}" for value in values))
+noise_std = float(sys.argv[1])
+values = [float(x) for x in sys.argv[2:]]
+perturbation_str = "_".join(f"{v:.0e}" for v in values)
+if noise_std == 0.0:
+    print(perturbation_str)
+else:
+    print(f"{perturbation_str}_noise{noise_std:.0e}")
 PY
 )"
 
-CYCLIC_MEMORY_DIR="$ABS_MODEL_DIR/cyclic_memory_${PERTURBATION_STR}"
+CYCLIC_MEMORY_DIR="$ABS_MODEL_DIR/cyclic_memory_${DIR_SUFFIX}"
 LOGS_DIR="$SCRIPT_DIR/slurm_logs"
 mkdir -p "$LOGS_DIR"
 

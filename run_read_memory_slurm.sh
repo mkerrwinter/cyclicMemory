@@ -13,14 +13,15 @@ MODEL_DIR="snellius_results/mnist_w10_lr0.01_B32_r0"
 
 # Read parameters (defaults from read_write.py unless you want to override)
 MAX_PERTURBATION=1.5e-3   # largest perturbation amplitude to probe
-WRITE_PERTURBATION=(5e-4 5e-4 5e-4 1e-3)   # perturbation amplitude(s), space-separated for multiple
+WRITE_PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4)    # perturbation amplitude(s), space-separated for multiple
 EPSILON=1e-5            # weight-change threshold to count a weight as "changed"
-DW=1e-4
+DW=5e-5
 LR=0.1
 N_GD_STEPS=2000
 INPUT_DIM=10
 WIDTH=10
 DATA_DIR="data"
+LABEL_NOISE_STD=1e-7
 
 # SLURM resource settings
 PARTITION=fat_rome
@@ -83,6 +84,7 @@ for CKPT in "${CHECKPOINTS[@]}"; do
             --max_perturbation $MAX_PERTURBATION \
             --epsilon $EPSILON \
             --dW $DW \
+            --label_noise_std $LABEL_NOISE_STD \
             --lr $LR \
             --n_gd_steps $N_GD_STEPS \
             --input_dim $INPUT_DIM \

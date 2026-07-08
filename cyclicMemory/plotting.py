@@ -227,6 +227,7 @@ def plot_average_changed_weights_vs_perturbation(
     perturbation_str: str,
     out_path: str = None,
     epsilon: float = 1e-5,
+    label_noise_std: float = 0.0,
 ) -> None:
     """
     Average the number of changed weights over multiple repeat runs and plot
@@ -242,7 +243,17 @@ def plot_average_changed_weights_vs_perturbation(
                       inside each repeat run folder)
     out_path        : optional explicit output path
     epsilon         : threshold — weight counted as changed if |delta| > epsilon
+    label_noise_std : if > 0, look for the noisy-run directory suffix
+                      cyclic_memory_<perturbation_str>_noise<label_noise_std:.0e>
+                      instead of cyclic_memory_<perturbation_str>. Must match the
+                      value used when write_memory was called.
     """
+    dir_suffix = (
+        perturbation_str
+        if label_noise_std == 0.0
+        else f"{perturbation_str}_noise{label_noise_std:.0e}"
+    )
+
     # Collect n_changed arrays per repeat, keyed by n_cycles
     # Structure: {n_cycles: [ [n_changed_per_perturbation_step], ... ]}
     all_data: dict[int, list[list[int]]] = defaultdict(list)
@@ -250,7 +261,7 @@ def plot_average_changed_weights_vs_perturbation(
 
     for r in repeats:
         cyclic_dir = os.path.abspath(
-            f"{run_base}_r{r}/cyclic_memory_{perturbation_str}"
+            f"{run_base}_r{r}/cyclic_memory_{dir_suffix}"
         )
         if not os.path.isdir(cyclic_dir):
             print(f"  WARNING: directory not found, skipping: {cyclic_dir}")
@@ -299,7 +310,7 @@ def plot_average_changed_weights_vs_perturbation(
         out_dir = os.path.abspath(f"{run_base}_r{repeats[0]}")
         out_path = os.path.join(
             out_dir,
-            f"average_changed_weights_vs_perturbation_{perturbation_str}_eps{epsilon:.2e}.pdf",
+            f"average_changed_weights_vs_perturbation_{dir_suffix}_eps{epsilon:.2e}.pdf",
         )
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path)
@@ -566,6 +577,14 @@ def main() -> None:
              "(used by: changed_weights_vs_perturbation, default: 1e-5)",
     )
     parser.add_argument(
+        "--label_noise_std",
+        type=float,
+        default=0.0,
+        help="Label noise std used during write_memory. When > 0, targets the "
+             "cyclic_memory_<perturbation_str>_noise<label_noise_std:.0e>/ directory. "
+             "(used by: average_changed_weights_vs_perturbation, default: 0.0)",
+    )
+    parser.add_argument(
         "--out",
         type=str,
         default=None,
@@ -596,7 +615,8 @@ def main() -> None:
                 "for average_changed_weights_vs_perturbation"
             )
         plot_average_changed_weights_vs_perturbation(
-            args.run_base, args.repeats, args.perturbation_str, out, args.epsilon
+            args.run_base, args.repeats, args.perturbation_str, out, args.epsilon,
+            label_noise_std=args.label_noise_std,
         )
     elif args.plot == "test_loss_vs_write_cycles":
         plot_test_loss_vs_write_cycles(args.cyclic_dir, out_path=out)
@@ -618,20 +638,27 @@ if __name__ == "__main__":
     # main()
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
-    # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
-    # eps = 5e-7
-    # plot_average_changed_weights_vs_perturbation(
-    #     run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
-    #     repeats=[0, 2, 3, 4, 5, 6, 7, 8],
-    #     perturbation_str=perturbation_string,
-    #     out_path="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_eps{}.pdf".format(perturbation_string, eps),
-    #     epsilon=eps,
-    # )
+    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
+    eps = 5e-7
+    label_noise_std = 1e-7
+    if label_noise_std == 0.0:
+        outpath = '/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_eps{}.pdf'.format(perturbation_string, eps)
+    else:
+        outpath = '/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_noise{}_eps{}.pdf'.format(perturbation_string, label_noise_std, eps)
+
+    plot_average_changed_weights_vs_perturbation(
+        run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
+        repeats=[0, 2, 3, 4, 5, 6, 7, 8],
+        perturbation_str=perturbation_string,
+        out_path=outpath,
+        epsilon=eps,
+        label_noise_std=label_noise_std
+    )
 
     # Single run (r0)
-    plot_test_loss_vs_write_cycles(
-        cyclic_dir="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03"
-    )
+    # plot_test_loss_vs_write_cycles(
+    #     cyclic_dir="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03"
+    # )
 
     # # Averaged over repeats
     # plot_average_test_loss_vs_write_cycles(

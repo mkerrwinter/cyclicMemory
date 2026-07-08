@@ -8,6 +8,7 @@
 # ---- Edit these -----------------------------------------------------------
 # List the model directories (each should contain a model.pt file)
 MODEL_DIRS=(
+    "snellius_results/mnist_w10_lr0.01_B32_r0"
     "snellius_results/mnist_w10_lr0.01_B32_r2"
     "snellius_results/mnist_w10_lr0.01_B32_r3"
     "snellius_results/mnist_w10_lr0.01_B32_r4"
@@ -18,10 +19,8 @@ MODEL_DIRS=(
 )
 
 # Write parameters (defaults from read_write.py)
-# PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4)   # perturbation amplitude(s), space-separated for multiple
-PERTURBATION=(1e-3)
-#DW=5e-5
-DW=1e-4
+PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4)   # perturbation amplitude(s), space-separated for multiple
+DW=5e-5
 LR=0.1
 N_GD_STEPS=2000
 N_CYCLES=200
@@ -30,7 +29,7 @@ INPUT_DIM=10
 WIDTH=10
 DATA_DIR="data"
 START_CYCLE=0
-LABEL_NOISE_STD=0.0
+LABEL_NOISE_STD=1e-6
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

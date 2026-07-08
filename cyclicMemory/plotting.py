@@ -19,6 +19,11 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('TkAgg')
 
+import torch
+
+from random_dataset import RandomVectorDataset          # noqa: F401 — required for torch.load unpickling
+from reduced_MNIST_dataset import ReducedMNISTDataset   # noqa: F401 — required for torch.load unpickling
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -303,6 +308,187 @@ def plot_average_changed_weights_vs_perturbation(
 
 
 # ---------------------------------------------------------------------------
+# Helpers for test-loss evaluation
+# ---------------------------------------------------------------------------
+
+def _infer_model_dims(state_dict: dict) -> tuple[int, int]:
+    """Return (input_dim, width) inferred from a model state_dict."""
+    w0 = state_dict["net.0.weight"]  # shape: (width, input_dim)
+    return w0.shape[1], w0.shape[0]
+
+
+def _eval_test_loss(state_dict: dict, data_dir: str, device: torch.device) -> float:
+    """Load model weights and return the quadratic-hinge test loss."""
+    from train import make_quadratic_hinge_loss, load_datasets
+    from model import FCNN
+
+    input_dim, width = _infer_model_dims(state_dict)
+    model = FCNN(input_dim=input_dim, width=width).to(device)
+    model.load_state_dict(state_dict)
+    model.eval()
+
+    _, test_ds = load_datasets(data_dir)
+    from torch.utils.data import DataLoader
+    loader = DataLoader(test_ds, batch_size=512, shuffle=False)
+    loss_fn = make_quadratic_hinge_loss()
+
+    total, seen = 0.0, 0
+    with torch.no_grad():
+        for X, y in loader:
+            X, y = X.to(device), y.to(device)
+            total += loss_fn(model(X), y).item() * len(y)
+            seen  += len(y)
+    return total / seen
+
+
+def _load_test_losses(cyclic_dir: str, data_dir: str) -> dict[int, float]:
+    """
+    Load all model_cycle*.pt files from cyclic_dir and return a dict
+    mapping write-cycle count -> test loss.
+    """
+    pattern = re.compile(r"^model_cycle(\d+)\.pt$")
+    device  = torch.device("cpu")
+    results = {}
+    for fname in sorted(os.listdir(cyclic_dir)):
+        m = pattern.match(fname)
+        if not m:
+            continue
+        n_cycles  = int(m.group(1))
+        state_dict = torch.load(
+            os.path.join(cyclic_dir, fname),
+            map_location=device,
+            weights_only=False,
+        )
+        results[n_cycles] = _eval_test_loss(state_dict, data_dir, device)
+        print(f"  cycle {n_cycles:>6}  test_loss={results[n_cycles]:.6f}")
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Plot: test loss vs write cycles (single run)
+# ---------------------------------------------------------------------------
+
+def plot_test_loss_vs_write_cycles(
+    cyclic_dir: str,
+    data_dir: str = None,
+    out_path: str = None,
+) -> None:
+    """
+    Load every model_cycle*.pt checkpoint from *cyclic_dir*, evaluate its
+    test loss, and plot test loss vs write-cycle count.
+
+    Parameters
+    ----------
+    cyclic_dir : path to a cyclic_memory_<perturbation>/ directory containing
+                 model_cycle*.pt files (written by read_write.write_memory).
+    data_dir   : path to the directory with train_dataset.pt / test_dataset.pt.
+                 Defaults to <repo_root>/data.
+    out_path   : optional explicit output path.
+    """
+    cyclic_dir = os.path.abspath(cyclic_dir)
+    if data_dir is None:
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+
+    print(f"Evaluating checkpoints in: {cyclic_dir}")
+    losses = _load_test_losses(cyclic_dir, data_dir)
+    if not losses:
+        print("No model_cycle*.pt files found.")
+        return
+
+    cycles     = sorted(losses.keys())
+    test_losses = [losses[c] for c in cycles]
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(cycles, test_losses, marker="o", markersize=4, linewidth=1.5, color="steelblue")
+    ax.set_xlabel("Write cycles")
+    ax.set_ylabel("Test loss")
+    ax.set_yscale("log")
+    fig.tight_layout()
+
+    if out_path is None:
+        out_path = os.path.join(os.path.dirname(cyclic_dir), "plots", f"test_loss_vs_write_cycles_{os.path.basename(cyclic_dir)}.pdf")
+
+        # out_path = os.path.join(
+        #     cyclic_dir,
+        #     f"test_loss_vs_write_cycles_{os.path.basename(cyclic_dir)}.pdf",
+        # )
+    fig.savefig(out_path)
+    plt.close(fig)
+    print(f"Saved → {out_path}")
+
+
+# ---------------------------------------------------------------------------
+# Plot: test loss vs write cycles (averaged over repeats)
+# ---------------------------------------------------------------------------
+
+def plot_average_test_loss_vs_write_cycles(
+    run_base: str,
+    repeats: list[int],
+    perturbation_str: str,
+    data_dir: str = None,
+    out_path: str = None,
+) -> None:
+    """
+    Average test loss over multiple repeat runs and plot mean (± std shading)
+    vs write-cycle count.
+
+    Parameters
+    ----------
+    run_base         : shared path prefix, e.g.
+                       '.../snellius_results/mnist_w10_lr0.01_B32'
+    repeats          : list of repeat indices, e.g. [0, 2, 3, 4]
+    perturbation_str : cyclic_memory subdirectory suffix, e.g. '1e-03'
+    data_dir         : path to train/test datasets (defaults to <repo>/data)
+    out_path         : optional explicit output path
+    """
+    if data_dir is None:
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+
+    # {n_cycles: [loss_repeat0, loss_repeat1, ...]}
+    all_losses: dict[int, list[float]] = defaultdict(list)
+
+    for r in repeats:
+        cyclic_dir = os.path.abspath(f"{run_base}_r{r}/cyclic_memory_{perturbation_str}")
+        if not os.path.isdir(cyclic_dir):
+            print(f"  WARNING: directory not found, skipping: {cyclic_dir}")
+            continue
+        print(f"  Loading checkpoints from: {cyclic_dir}")
+        losses = _load_test_losses(cyclic_dir, data_dir)
+        for n_cycles, loss in losses.items():
+            all_losses[n_cycles].append(loss)
+
+    if not all_losses:
+        print("No data found across any repeat.")
+        return
+
+    cycles = sorted(all_losses.keys())
+    means  = np.array([np.mean(all_losses[c]) for c in cycles])
+    stds   = np.array([np.std(all_losses[c])  for c in cycles])
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(cycles, means, marker="o", markersize=4, linewidth=1.5, color="steelblue",
+            label=f"mean (n={len(repeats)} repeats)")
+    ax.fill_between(cycles, means - stds, means + stds, alpha=0.25, color="steelblue",
+                    label="±1 std")
+    ax.set_xlabel("Write cycles")
+    ax.set_ylabel("Test loss")
+    ax.set_yscale("log")
+    ax.legend(fontsize=8, loc="best")
+    fig.tight_layout()
+
+    if out_path is None:
+        out_dir  = os.path.abspath(f"{run_base}_r{repeats[0]}")
+        out_path = os.path.join(
+            out_dir,
+            f"average_test_loss_vs_write_cycles_{perturbation_str}.pdf",
+        )
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    fig.savefig(out_path)
+    plt.close(fig)
+    print(f"Saved → {out_path}")
+
+
+# ---------------------------------------------------------------------------
 # Registry of available plots
 # ---------------------------------------------------------------------------
 
@@ -310,6 +496,8 @@ PLOTS = {
     "final_loss_vs_width":                      plot_final_loss_vs_width,
     "changed_weights_vs_perturbation":          plot_changed_weights_vs_perturbation,
     "average_changed_weights_vs_perturbation":  plot_average_changed_weights_vs_perturbation,
+    "test_loss_vs_write_cycles":                plot_test_loss_vs_write_cycles,
+    "average_test_loss_vs_write_cycles":        plot_average_test_loss_vs_write_cycles,
 }
 
 
@@ -410,6 +598,17 @@ def main() -> None:
         plot_average_changed_weights_vs_perturbation(
             args.run_base, args.repeats, args.perturbation_str, out, args.epsilon
         )
+    elif args.plot == "test_loss_vs_write_cycles":
+        plot_test_loss_vs_write_cycles(args.cyclic_dir, out_path=out)
+    elif args.plot == "average_test_loss_vs_write_cycles":
+        if not args.run_base or not args.repeats or not args.perturbation_str:
+            parser.error(
+                "--run_base, --repeats, and --perturbation_str are required "
+                "for average_test_loss_vs_write_cycles"
+            )
+        plot_average_test_loss_vs_write_cycles(
+            args.run_base, args.repeats, args.perturbation_str, out_path=out
+        )
     else:
         plot_fn = PLOTS[args.plot]
         plot_fn(args.results_dir, out)
@@ -419,12 +618,24 @@ if __name__ == "__main__":
     # main()
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
-    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
-    eps = 5e-7
-    plot_average_changed_weights_vs_perturbation(
-        run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
-        repeats=[0, 2, 3, 4, 5, 6, 7, 8],
-        perturbation_str=perturbation_string,
-        out_path="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_eps{}.pdf".format(perturbation_string, eps),
-        epsilon=eps,
+    # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
+    # eps = 5e-7
+    # plot_average_changed_weights_vs_perturbation(
+    #     run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
+    #     repeats=[0, 2, 3, 4, 5, 6, 7, 8],
+    #     perturbation_str=perturbation_string,
+    #     out_path="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_eps{}.pdf".format(perturbation_string, eps),
+    #     epsilon=eps,
+    # )
+
+    # Single run (r0)
+    plot_test_loss_vs_write_cycles(
+        cyclic_dir="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03"
     )
+
+    # # Averaged over repeats
+    # plot_average_test_loss_vs_write_cycles(
+    #     run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
+    #     repeats=[0, 2, 3, 4],
+    #     perturbation_str="1e-03",
+    # )

@@ -29,7 +29,7 @@ INPUT_DIM=10
 WIDTH=10
 DATA_DIR="data"
 START_CYCLE=0
-LABEL_NOISE_STD=1e-6
+LABEL_NOISE_STD=1e-2
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

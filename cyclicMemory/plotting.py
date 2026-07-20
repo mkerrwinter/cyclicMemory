@@ -258,6 +258,8 @@ def plot_average_changed_weights_vs_perturbation(
     # Structure: {n_cycles: [ [n_changed_per_perturbation_step], ... ]}
     all_data: dict[int, list[list[int]]] = defaultdict(list)
     perturbations_ref: dict[int, list[float]] = {}
+    # Per-repeat data for individual plots: {r: {n_cycles: (perturbations, n_changed)}}
+    per_repeat_data: dict[int, dict] = {}
 
     for r in repeats:
         cyclic_dir = os.path.abspath(
@@ -269,6 +271,7 @@ def plot_average_changed_weights_vs_perturbation(
         else:
             print(f"  Loading data from: {cyclic_dir}")
         repeat_data = _load_n_changed(cyclic_dir, epsilon)
+        per_repeat_data[r] = repeat_data
         for n_cycles, (perturbations, n_changed) in repeat_data.items():
             all_data[n_cycles].append(n_changed)
             perturbations_ref.setdefault(n_cycles, perturbations)
@@ -316,6 +319,44 @@ def plot_average_changed_weights_vs_perturbation(
     fig.savefig(out_path)
     plt.close(fig)
     print(f"Saved → {out_path}")
+
+    # Save individual (non-averaged) plots for each repeat
+    for r, repeat_data in per_repeat_data.items():
+        if not repeat_data:
+            continue
+        repeat_sorted_cycles = sorted(repeat_data.keys())
+        repeat_colours = [cmap(i / max(len(repeat_sorted_cycles) - 1, 1))
+                          for i in range(len(repeat_sorted_cycles))]
+
+        fig_r, ax_r = plt.subplots(figsize=(7, 5))
+        handles_r = []
+        for n_cycles, colour in zip(repeat_sorted_cycles, repeat_colours):
+            perturbations, n_changed = repeat_data[n_cycles]
+            line, = ax_r.plot(perturbations, n_changed, color=colour, marker="o",
+                              markersize=4, linewidth=1.5, label=f"{n_cycles} write cycles")
+            handles_r.append(line)
+
+        if len(handles_r) > 5:
+            indices = [round(i * (len(handles_r) - 1) / 4) for i in range(5)]
+            legend_handles_r = [handles_r[i] for i in indices]
+        else:
+            legend_handles_r = handles_r
+
+        ax_r.set_xlabel("Perturbation size")
+        ax_r.set_ylabel("Number of changed weights")
+        ax_r.legend(handles=legend_handles_r, fontsize=8, loc="best")
+        fig_r.tight_layout()
+
+        repeat_run_dir = os.path.abspath(f"{run_base}_r{r}")
+        plots_dir = os.path.join(repeat_run_dir, "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        repeat_out = os.path.join(
+            plots_dir,
+            f"changed_weights_vs_perturbation_{dir_suffix}_eps{epsilon:.2e}.pdf",
+        )
+        fig_r.savefig(repeat_out)
+        plt.close(fig_r)
+        print(f"Saved → {repeat_out}")
 
 
 # ---------------------------------------------------------------------------
@@ -440,8 +481,9 @@ def plot_average_test_loss_vs_write_cycles(
     out_path: str = None,
 ) -> None:
     """
-    Average test loss over multiple repeat runs and plot mean (± std shading)
-    vs write-cycle count.
+    Average test loss over multiple repeat runs and plot mean vs write-cycle
+    count, with individual repeat curves shown in the background at low alpha.
+    Individual plots are also saved to each repeat's plots/ directory.
 
     Parameters
     ----------
@@ -450,13 +492,16 @@ def plot_average_test_loss_vs_write_cycles(
     repeats          : list of repeat indices, e.g. [0, 2, 3, 4]
     perturbation_str : cyclic_memory subdirectory suffix, e.g. '1e-03'
     data_dir         : path to train/test datasets (defaults to <repo>/data)
-    out_path         : optional explicit output path
+    out_path         : optional explicit output path for the averaged plot;
+                       defaults to <snellius_results>/aggregate_plots/
     """
     if data_dir is None:
         data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
 
     # {n_cycles: [loss_repeat0, loss_repeat1, ...]}
     all_losses: dict[int, list[float]] = defaultdict(list)
+    # {r: {n_cycles: loss}} for individual plots
+    per_repeat_losses: dict[int, dict[int, float]] = {}
 
     for r in repeats:
         cyclic_dir = os.path.abspath(f"{run_base}_r{r}/cyclic_memory_{perturbation_str}")
@@ -465,6 +510,7 @@ def plot_average_test_loss_vs_write_cycles(
             continue
         print(f"  Loading checkpoints from: {cyclic_dir}")
         losses = _load_test_losses(cyclic_dir, data_dir)
+        per_repeat_losses[r] = losses
         for n_cycles, loss in losses.items():
             all_losses[n_cycles].append(loss)
 
@@ -474,13 +520,20 @@ def plot_average_test_loss_vs_write_cycles(
 
     cycles = sorted(all_losses.keys())
     means  = np.array([np.mean(all_losses[c]) for c in cycles])
-    stds   = np.array([np.std(all_losses[c])  for c in cycles])
 
     fig, ax = plt.subplots(figsize=(7, 5))
+
+    # Individual repeat curves in the background
+    for r, losses in per_repeat_losses.items():
+        r_cycles = sorted(losses.keys())
+        r_vals   = [losses[c] for c in r_cycles]
+        ax.plot(r_cycles, r_vals, color="steelblue", linewidth=0.8,
+                alpha=0.25, marker="o", markersize=2)
+
+    # Mean on top
     ax.plot(cycles, means, marker="o", markersize=4, linewidth=1.5, color="steelblue",
-            label=f"mean (n={len(repeats)} repeats)")
-    ax.fill_between(cycles, means - stds, means + stds, alpha=0.25, color="steelblue",
-                    label="±1 std")
+            label=f"mean (n={len(per_repeat_losses)} repeats)")
+
     ax.set_xlabel("Write cycles")
     ax.set_ylabel("Test loss")
     ax.set_yscale("log")
@@ -488,15 +541,39 @@ def plot_average_test_loss_vs_write_cycles(
     fig.tight_layout()
 
     if out_path is None:
-        out_dir  = os.path.abspath(f"{run_base}_r{repeats[0]}")
+        aggregate_dir = os.path.join(os.path.dirname(os.path.abspath(run_base)), "aggregate_plots")
         out_path = os.path.join(
-            out_dir,
+            aggregate_dir,
             f"average_test_loss_vs_write_cycles_{perturbation_str}.pdf",
         )
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path)
     plt.close(fig)
     print(f"Saved → {out_path}")
+
+    # Save individual test loss plots for each repeat
+    for r, losses in per_repeat_losses.items():
+        if not losses:
+            continue
+        r_cycles = sorted(losses.keys())
+        r_vals   = [losses[c] for c in r_cycles]
+
+        fig_r, ax_r = plt.subplots(figsize=(7, 5))
+        ax_r.plot(r_cycles, r_vals, marker="o", markersize=4, linewidth=1.5, color="steelblue")
+        ax_r.set_xlabel("Write cycles")
+        ax_r.set_ylabel("Test loss")
+        ax_r.set_yscale("log")
+        fig_r.tight_layout()
+
+        plots_dir = os.path.join(os.path.abspath(f"{run_base}_r{r}"), "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        repeat_out = os.path.join(
+            plots_dir,
+            f"test_loss_vs_write_cycles_{perturbation_str}.pdf",
+        )
+        fig_r.savefig(repeat_out)
+        plt.close(fig_r)
+        print(f"Saved → {repeat_out}")
 
 
 # ---------------------------------------------------------------------------
@@ -640,7 +717,7 @@ if __name__ == "__main__":
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
     perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
     eps = 5e-7
-    label_noise_std = 1e-7
+    label_noise_std = 1e-06
     if label_noise_std == 0.0:
         outpath = '/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_eps{}.pdf'.format(perturbation_string, eps)
     else:
@@ -663,6 +740,6 @@ if __name__ == "__main__":
     # # Averaged over repeats
     # plot_average_test_loss_vs_write_cycles(
     #     run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
-    #     repeats=[0, 2, 3, 4],
+    #     repeats=[2, 3, 4, 5, 6, 8],
     #     perturbation_str="1e-03",
     # )

@@ -29,7 +29,7 @@ LABEL_NOISE_STD=1e-2
 PARTITION=fat_rome
 CPUS=16       # fat_rome minimum allocation; all 16 used as parallel probe workers
 MEM=8G
-TIME=24:00:00
+TIME=18:00:00
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

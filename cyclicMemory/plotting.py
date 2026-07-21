@@ -23,7 +23,7 @@ import torch
 
 from random_dataset import RandomVectorDataset          # noqa: F401 — required for torch.load unpickling
 from reduced_MNIST_dataset import ReducedMNISTDataset   # noqa: F401 — required for torch.load unpickling
-from paths import RESULTS_DIR
+from paths import RESULTS_DIR, LOCAL_RESULTS_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -597,7 +597,7 @@ PLOTS = {
 # ---------------------------------------------------------------------------
 
 DEFAULT_CYCLIC_DIR = os.path.join(
-    RESULTS_DIR,
+    LOCAL_RESULTS_DIR,
     "mnist_w10_lr0.01_B32_r0", "cyclic_memory_5e-04_5e-04_5e-04_1e-03",
 )
 
@@ -720,14 +720,14 @@ if __name__ == "__main__":
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
     perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
     eps = 5e-7
-    label_noise_std = 1e-06
+    label_noise_std = 1e-02
     if label_noise_std == 0.0:
-        outpath = os.path.join(RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_eps{}.pdf'.format(perturbation_string, eps))
+        outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_eps{}.pdf'.format(perturbation_string, eps))
     else:
-        outpath = os.path.join(RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_noise{}_eps{}.pdf'.format(perturbation_string, label_noise_std, eps))
+        outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_noise{}_eps{}.pdf'.format(perturbation_string, label_noise_std, eps))
 
     plot_average_changed_weights_vs_perturbation(
-        run_base=os.path.join(RESULTS_DIR, "mnist_w10_lr0.01_B32"),
+        run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
         repeats=[0, 2, 3, 4, 5, 6, 7, 8],
         perturbation_str=perturbation_string,
         out_path=outpath,
@@ -737,12 +737,12 @@ if __name__ == "__main__":
 
     # Single run (r0)
     # plot_test_loss_vs_write_cycles(
-    #     cyclic_dir=os.path.join(RESULTS_DIR, "mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03")
+    #     cyclic_dir=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03")
     # )
 
     # # Averaged over repeats
     # plot_average_test_loss_vs_write_cycles(
-    #     run_base=os.path.join(RESULTS_DIR, "mnist_w10_lr0.01_B32"),
+    #     run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
     #     repeats=[2, 3, 4, 5, 6, 8],
     #     perturbation_str="1e-03",
     # )

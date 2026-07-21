@@ -23,6 +23,7 @@ import torch
 
 from random_dataset import RandomVectorDataset          # noqa: F401 — required for torch.load unpickling
 from reduced_MNIST_dataset import ReducedMNISTDataset   # noqa: F401 — required for torch.load unpickling
+from paths import RESULTS_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +440,8 @@ def plot_test_loss_vs_write_cycles(
     """
     cyclic_dir = os.path.abspath(cyclic_dir)
     if data_dir is None:
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+        from paths import DATA_DIR
+        data_dir = DATA_DIR
 
     print(f"Evaluating checkpoints in: {cyclic_dir}")
     losses = _load_test_losses(cyclic_dir, data_dir)
@@ -496,7 +498,8 @@ def plot_average_test_loss_vs_write_cycles(
                        defaults to <snellius_results>/aggregate_plots/
     """
     if data_dir is None:
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+        from paths import DATA_DIR
+        data_dir = DATA_DIR
 
     # {n_cycles: [loss_repeat0, loss_repeat1, ...]}
     all_losses: dict[int, list[float]] = defaultdict(list)
@@ -594,8 +597,8 @@ PLOTS = {
 # ---------------------------------------------------------------------------
 
 DEFAULT_CYCLIC_DIR = os.path.join(
-    "/Users/maxkerrwinter/Documents/python/cyclicMemory",
-    "snellius_results", "mnist_w10_lr0.01_B32_r0", "cyclic_memory_5e-04_5e-04_5e-04_1e-03",
+    RESULTS_DIR,
+    "mnist_w10_lr0.01_B32_r0", "cyclic_memory_5e-04_5e-04_5e-04_1e-03",
 )
 
 
@@ -719,12 +722,12 @@ if __name__ == "__main__":
     eps = 5e-7
     label_noise_std = 1e-06
     if label_noise_std == 0.0:
-        outpath = '/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_eps{}.pdf'.format(perturbation_string, eps)
+        outpath = os.path.join(RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_eps{}.pdf'.format(perturbation_string, eps))
     else:
-        outpath = '/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/aggregate_plots/average_changed_weights_vs_perturbation_{}_noise{}_eps{}.pdf'.format(perturbation_string, label_noise_std, eps)
+        outpath = os.path.join(RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_noise{}_eps{}.pdf'.format(perturbation_string, label_noise_std, eps))
 
     plot_average_changed_weights_vs_perturbation(
-        run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
+        run_base=os.path.join(RESULTS_DIR, "mnist_w10_lr0.01_B32"),
         repeats=[0, 2, 3, 4, 5, 6, 7, 8],
         perturbation_str=perturbation_string,
         out_path=outpath,
@@ -734,12 +737,12 @@ if __name__ == "__main__":
 
     # Single run (r0)
     # plot_test_loss_vs_write_cycles(
-    #     cyclic_dir="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03"
+    #     cyclic_dir=os.path.join(RESULTS_DIR, "mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03")
     # )
 
     # # Averaged over repeats
     # plot_average_test_loss_vs_write_cycles(
-    #     run_base="/Users/maxkerrwinter/Documents/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32",
+    #     run_base=os.path.join(RESULTS_DIR, "mnist_w10_lr0.01_B32"),
     #     repeats=[2, 3, 4, 5, 6, 8],
     #     perturbation_str="1e-03",
     # )

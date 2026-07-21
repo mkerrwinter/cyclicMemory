@@ -32,7 +32,7 @@ from model import FCNN
 # Core training routine
 # ---------------------------------------------------------------------------
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
+from paths import DATA_DIR
 
 
 def load_datasets(data_dir: str = DATA_DIR):

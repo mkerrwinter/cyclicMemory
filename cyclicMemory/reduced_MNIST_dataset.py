@@ -110,7 +110,8 @@ if __name__ == "__main__":
     print(f"Test dataset:  {len(test_ds)} samples,  input dim: {test_ds.X.shape[1]}")
 
     # Save datasets to disk
-    data_dir = os.path.join(os.path.dirname(__file__), "..", "data")
+    from paths import DATA_DIR
+    data_dir = DATA_DIR
     os.makedirs(data_dir, exist_ok=True)
     torch.save(train_ds, os.path.join(data_dir, "train_dataset.pt"))
     torch.save(test_ds,  os.path.join(data_dir, "test_dataset.pt"))

@@ -8,14 +8,14 @@
 # ---- Edit these -----------------------------------------------------------
 # List the model directories (each should contain a model.pt file)
 MODEL_DIRS=(
-    "snellius_results/mnist_w10_lr0.01_B32_r0"
-    "snellius_results/mnist_w10_lr0.01_B32_r2"
-    "snellius_results/mnist_w10_lr0.01_B32_r3"
-    "snellius_results/mnist_w10_lr0.01_B32_r4"
-    "snellius_results/mnist_w10_lr0.01_B32_r5"
-    "snellius_results/mnist_w10_lr0.01_B32_r6"
-    "snellius_results/mnist_w10_lr0.01_B32_r7"
-    "snellius_results/mnist_w10_lr0.01_B32_r8"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r2"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r3"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r4"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r5"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r6"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r7"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r8"
 )
 
 # Write parameters (defaults from read_write.py)
@@ -27,7 +27,7 @@ N_CYCLES=200
 SAVE_FREQ=10
 INPUT_DIM=10
 WIDTH=10
-DATA_DIR="data"
+DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 START_CYCLE=0
 LABEL_NOISE_STD=1e-2
 # ---------------------------------------------------------------------------
@@ -41,7 +41,7 @@ echo "Submitting write_memory SLURM jobs..."
 echo ""
 
 for MODEL_DIR in "${MODEL_DIRS[@]}"; do
-    MODEL_PATH="$SCRIPT_DIR/$MODEL_DIR/model.pt"
+    MODEL_PATH="$MODEL_DIR/model.pt"
 
     if [ ! -f "$MODEL_PATH" ]; then
         echo "  WARNING: model.pt not found at '$MODEL_PATH', skipping."
@@ -70,7 +70,7 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
             --save_freq $SAVE_FREQ \
             --input_dim $INPUT_DIM \
             --width $WIDTH \
-            --data_dir '$SCRIPT_DIR/$DATA_DIR'")
+            --data_dir '$DATA_DIR'")
 
     echo "  Submitted job $JOB_ID → $RUN_NAME"
     echo "    model_path : $MODEL_PATH"

@@ -9,7 +9,7 @@
 
 # ---- Edit these -----------------------------------------------------------
 # The model directory that was written by run_write_memory_slurm.sh.
-MODEL_DIR="snellius_results/mnist_w10_lr0.01_B32_r2"
+MODEL_DIR="/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r2"
 
 # Read parameters (defaults from read_write.py unless you want to override)
 MAX_PERTURBATION=1.5e-3   # largest perturbation amplitude to probe
@@ -22,7 +22,7 @@ LR=0.1
 N_GD_STEPS=2000
 INPUT_DIM=10
 WIDTH=10
-DATA_DIR="data"
+DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=0
 
 # SLURM resource settings
@@ -34,7 +34,7 @@ TIME=24:00:00
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$SCRIPT_DIR/cyclicMemory"
-ABS_MODEL_DIR="$SCRIPT_DIR/$MODEL_DIR"
+ABS_MODEL_DIR="$MODEL_DIR"
 
 DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "${WRITE_PERTURBATION[@]}" <<'PY'
 import sys
@@ -97,7 +97,7 @@ for CKPT in "${CHECKPOINTS[@]}"; do
             --input_dim $INPUT_DIM \
             --width $WIDTH \
             --n_workers $CPUS \
-            --data_dir '$SCRIPT_DIR/$DATA_DIR'")
+            --data_dir '$DATA_DIR'")
 
     echo "  Submitted job $JOB_ID → cycle $CYCLE_NUM  ($CKPT)"
 done

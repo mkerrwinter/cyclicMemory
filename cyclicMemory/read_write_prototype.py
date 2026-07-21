@@ -33,15 +33,13 @@ from train import make_quadratic_hinge_loss
 # Default paths
 # ---------------------------------------------------------------------------
 
+from paths import DATA_DIR, RESULTS_DIR
+
 DEFAULT_MODEL_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "..",
-    "snellius_results",
+    RESULTS_DIR,
     "mnist_w10_lr0.01_B32_r0",
     "model.pt",
 )
-
-DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 
 

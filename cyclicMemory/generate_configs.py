@@ -20,6 +20,8 @@ import os
 
 import yaml
 
+from paths import RESULTS_DIR
+
 
 def generate_configs(
     widths:        list[int]   = (64, 128, 256),
@@ -36,7 +38,7 @@ def generate_configs(
     train_seed:    int         = 42,
     test_seed:     int         = 123,
     dataset:       str         = "random",
-    results_dir:   str         = "results",
+    results_dir:   str         = RESULTS_DIR,
     out_dir:       str         = "configs",
 ):
     os.makedirs(out_dir, exist_ok=True)
@@ -97,7 +99,7 @@ if __name__ == "__main__":
     parser.add_argument("--n_train",      type=int,   default=5000)
     parser.add_argument("--n_test",       type=int,   default=1000)
     parser.add_argument("--input_dim",    type=int,   default=10)
-    parser.add_argument("--results_dir",  type=str,   default="results")
+    parser.add_argument("--results_dir",  type=str,   default=RESULTS_DIR)
     parser.add_argument("--dataset",      type=str,   default="random", choices=["random", "mnist"])
     args = parser.parse_args()
 

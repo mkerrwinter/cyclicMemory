@@ -74,16 +74,23 @@ def _gd_step(
     y: torch.Tensor,
     n_steps: int,
     label_noise_std: float = 0.0,
+    p_label_flip: float = 0.0,
 ) -> float:
     """Run `n_steps` of full-batch GD; return final loss.
 
     If label_noise_std > 0, a single Gaussian noise vector (mean=0,
     std=label_noise_std) is sampled once per call and added to y for all
     n_steps inner iterations — i.e. the noise changes once per dW step.
+
+    If p_label_flip > 0, each label is independently flipped (multiplied by
+    -1) with probability p_label_flip, sampled once per call.
     """
     y_train = y
     if label_noise_std > 0.0:
         y_train = y + torch.randn_like(y) * label_noise_std
+    if p_label_flip > 0.0:
+        flip_mask = torch.bernoulli(torch.full_like(y_train, p_label_flip)).bool()
+        y_train = torch.where(flip_mask, -y_train, y_train)
     for _ in range(n_steps):
         model.train()
         optimiser.zero_grad()
@@ -128,6 +135,7 @@ def write_memory(
     save_freq:        int    = 1,
     start_cycle:      int    = 0,
     label_noise_std:  float  = 0.0,
+    p_label_flip:     float  = 0.0,
     input_dim:        int    = 10,
     width:            int    = 10,
     data_dir:         str    = DATA_DIR,
@@ -158,6 +166,9 @@ def write_memory(
                    during each GD call (default: 0.0 = no noise). A fresh
                    noise vector is sampled once per dW step (i.e. per call
                    to _gd_step), so the noise changes each perturbation step.
+    p_label_flip : probability of flipping each label (±1 → ∓1) independently
+                   during each GD call (default: 0.0 = no flipping). A fresh
+                   flip mask is sampled once per dW step.
     input_dim    : input dimension of the network
     width        : hidden layer width of the network
     data_dir     : directory containing train_dataset.pt
@@ -168,7 +179,11 @@ def write_memory(
     # ---- output directory (needed before model load when resuming) ----------
     model_dir  = os.path.dirname(os.path.abspath(model_path))
     perturbation_str = "_".join(f"{A:.0e}" for A in perturbation)
-    dir_suffix = perturbation_str if label_noise_std == 0.0 else f"{perturbation_str}_noise{label_noise_std:.0e}"
+    dir_suffix = perturbation_str
+    if label_noise_std != 0.0:
+        dir_suffix += f"_noise{label_noise_std:.0e}"
+    if p_label_flip != 0.0:
+        dir_suffix += f"_flip{p_label_flip:.0e}"
     output_dir = os.path.join(model_dir, f"cyclic_memory_{dir_suffix}")
     os.makedirs(output_dir, exist_ok=True)
     print(f"Checkpoints will be saved to: {output_dir}")
@@ -237,12 +252,12 @@ def write_memory(
             # --- upward sweep (+dW × n_w_steps) ---
             for step in range(n_w_steps):
                 _perturb(model, +dW)
-                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std)
+                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std, p_label_flip)
 
             # --- downward sweep (-dW × n_w_steps) ---
             for step in range(n_w_steps):
                 _perturb(model, -dW)
-                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std)
+                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std, p_label_flip)
 
         # ---- end-of-cycle bookkeeping ---------------------------------------
         model.eval()
@@ -320,6 +335,7 @@ def read_memory(
     lr:               float  = DEFAULT_LR,
     n_gd_steps:       int    = DEFAULT_N_STEPS,
     label_noise_std:  float  = 0.0,
+    p_label_flip:     float  = 0.0,
     input_dim:        int    = 10,
     width:            int    = 10,
     data_dir:         str    = DATA_DIR,
@@ -360,6 +376,10 @@ def read_memory(
     dW               : single weight-perturbation step size
     lr               : learning rate for full-batch GD
     n_gd_steps       : number of GD steps after each ±dW nudge
+    label_noise_std  : label noise std used during writing — used to resolve the
+                       correct cyclic_memory directory (default: 0.0)
+    p_label_flip     : label flip probability used during writing — used to
+                       resolve the correct cyclic_memory directory (default: 0.0)
     input_dim        : input dimension of the network
     width            : hidden layer width of the network
     data_dir         : directory containing train_dataset.pt
@@ -370,7 +390,11 @@ def read_memory(
 
     # ---- resolve checkpoint path from model_dir + n_write_cycles -----------
     perturbation_str = "_".join(f"{A:.0e}" for A in write_perturbation)
-    dir_suffix = perturbation_str if label_noise_std == 0.0 else f"{perturbation_str}_noise{label_noise_std:.0e}"
+    dir_suffix = perturbation_str
+    if label_noise_std != 0.0:
+        dir_suffix += f"_noise{label_noise_std:.0e}"
+    if p_label_flip != 0.0:
+        dir_suffix += f"_flip{p_label_flip:.0e}"
     memory_dir = os.path.join(model_dir, f"cyclic_memory_{dir_suffix}")
     model_path = os.path.join(
         memory_dir, f"model_cycle{n_write_cycles:05d}.pt"
@@ -532,6 +556,12 @@ if __name__ == "__main__":
                              "GD call (default: 0.0 = no noise). A fresh noise vector is "
                              "sampled once per dW step."
                          ))
+    p_write.add_argument("--p_label_flip", type=float, default=0.0,
+                         help=(
+                             "Probability of flipping each label (±1 → ∓1) independently "
+                             "during each GD call (default: 0.0 = no flipping). A fresh "
+                             "flip mask is sampled once per dW step."
+                         ))
 
     # ---- read subcommand ----------------------------------------------------
     p_read = subparsers.add_parser("read", help="Read a memory by probing weight sensitivity")
@@ -572,6 +602,11 @@ if __name__ == "__main__":
                             "Label noise std used during writing — used to resolve the "
                             "correct cyclic_memory directory (default: 0.0)."
                         ))
+    p_read.add_argument("--p_label_flip", type=float, default=0.0,
+                        help=(
+                            "Label flip probability used during writing — used to resolve "
+                            "the correct cyclic_memory directory (default: 0.0)."
+                        ))
 
     args = parser.parse_args()
 
@@ -586,6 +621,7 @@ if __name__ == "__main__":
             save_freq    = args.save_freq,
             start_cycle  = args.start_cycle,
             label_noise_std = args.label_noise_std,
+            p_label_flip    = args.p_label_flip,
             input_dim    = args.input_dim,
             width        = args.width,
             data_dir     = args.data_dir,
@@ -601,6 +637,7 @@ if __name__ == "__main__":
             lr               = args.lr,
             n_gd_steps       = args.n_gd_steps,
             label_noise_std  = args.label_noise_std,
+            p_label_flip     = args.p_label_flip,
             input_dim        = args.input_dim,
             width            = args.width,
             data_dir         = args.data_dir,

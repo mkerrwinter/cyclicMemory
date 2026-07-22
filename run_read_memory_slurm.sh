@@ -24,6 +24,7 @@ INPUT_DIM=10
 WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=1e-2
+P_LABEL_FLIP=0
 
 # SLURM resource settings
 PARTITION=fat_rome
@@ -36,16 +37,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$SCRIPT_DIR/cyclicMemory"
 ABS_MODEL_DIR="$MODEL_DIR"
 
-DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "${WRITE_PERTURBATION[@]}" <<'PY'
+DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_LABEL_FLIP" "${WRITE_PERTURBATION[@]}" <<'PY'
 import sys
 
 noise_std = float(sys.argv[1])
-values = [float(x) for x in sys.argv[2:]]
+p_flip = float(sys.argv[2])
+values = [float(x) for x in sys.argv[3:]]
 perturbation_str = "_".join(f"{v:.0e}" for v in values)
-if noise_std == 0.0:
-    print(perturbation_str)
-else:
-    print(f"{perturbation_str}_noise{noise_std:.0e}")
+suffix = perturbation_str
+if noise_std != 0.0:
+    suffix += f"_noise{noise_std:.0e}"
+if p_flip != 0.0:
+    suffix += f"_flip{p_flip:.0e}"
+print(suffix)
 PY
 )"
 
@@ -92,6 +96,7 @@ for CKPT in "${CHECKPOINTS[@]}"; do
             --epsilon $EPSILON \
             --dW $DW \
             --label_noise_std $LABEL_NOISE_STD \
+            --p_label_flip $P_LABEL_FLIP \
             --lr $LR \
             --n_gd_steps $N_GD_STEPS \
             --input_dim $INPUT_DIM \

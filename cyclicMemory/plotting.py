@@ -229,6 +229,8 @@ def plot_average_changed_weights_vs_perturbation(
     out_path: str = None,
     epsilon: float = 1e-5,
     label_noise_std: float = 0.0,
+    p_label_flip: float = 0.0,
+    legend_only: bool = False,
 ) -> None:
     """
     Average the number of changed weights over multiple repeat runs and plot
@@ -248,12 +250,18 @@ def plot_average_changed_weights_vs_perturbation(
                       cyclic_memory_<perturbation_str>_noise<label_noise_std:.0e>
                       instead of cyclic_memory_<perturbation_str>. Must match the
                       value used when write_memory was called.
+    p_label_flip    : if > 0, also appends _flip<p_label_flip:.0e> to the
+                      directory suffix. Must match the value used when
+                      write_memory was called.
+    legend_only     : if True, plot only the 5 write-cycle counts that appear in
+                      the legend (evenly spaced across the full range), rather
+                      than all available cycle counts.
     """
-    dir_suffix = (
-        perturbation_str
-        if label_noise_std == 0.0
-        else f"{perturbation_str}_noise{label_noise_std:.0e}"
-    )
+    dir_suffix = perturbation_str
+    if label_noise_std != 0.0:
+        dir_suffix += f"_noise{label_noise_std:.0e}"
+    if p_label_flip != 0.0:
+        dir_suffix += f"_flip{p_label_flip:.0e}"
 
     # Collect n_changed arrays per repeat, keyed by n_cycles
     # Structure: {n_cycles: [ [n_changed_per_perturbation_step], ... ]}
@@ -282,6 +290,13 @@ def plot_average_changed_weights_vs_perturbation(
         return
 
     sorted_cycles = sorted(all_data.keys())
+
+    # When legend_only=True, restrict to the 5 evenly-spaced cycle counts that
+    # would have appeared in the legend anyway.
+    if legend_only and len(sorted_cycles) > 5:
+        indices = [round(i * (len(sorted_cycles) - 1) / 4) for i in range(5)]
+        sorted_cycles = [sorted_cycles[i] for i in indices]
+
     cmap = plt.cm.viridis
     colours = [cmap(i / max(len(sorted_cycles) - 1, 1)) for i in range(len(sorted_cycles))]
 
@@ -291,22 +306,15 @@ def plot_average_changed_weights_vs_perturbation(
     for n_cycles, colour in zip(sorted_cycles, colours):
         arrays = np.array(all_data[n_cycles], dtype=float)  # shape (n_repeats, n_steps)
         mean = arrays.mean(axis=0)
-        std  = arrays.std(axis=0)
         perturbations = perturbations_ref[n_cycles]
 
-        line, = ax.plot(perturbations, mean, color=colour, marker="o", markersize=4,
+        line, = ax.plot(perturbations, mean, color=colour,
                         linewidth=1.5, label=f"{n_cycles} write cycles")
         handles.append(line)
 
-    if len(handles) > 5:
-        indices = [round(i * (len(handles) - 1) / 4) for i in range(5)]
-        legend_handles = [handles[i] for i in indices]
-    else:
-        legend_handles = handles
-
     ax.set_xlabel("Perturbation size")
     ax.set_ylabel("Number of changed weights")
-    ax.legend(handles=legend_handles, fontsize=8, loc="best")
+    ax.legend(handles=handles, fontsize=8, loc="best")
     fig.tight_layout()
 
     if out_path is None:
@@ -326,6 +334,9 @@ def plot_average_changed_weights_vs_perturbation(
         if not repeat_data:
             continue
         repeat_sorted_cycles = sorted(repeat_data.keys())
+        if legend_only and len(repeat_sorted_cycles) > 5:
+            indices = [round(i * (len(repeat_sorted_cycles) - 1) / 4) for i in range(5)]
+            repeat_sorted_cycles = [repeat_sorted_cycles[i] for i in indices]
         repeat_colours = [cmap(i / max(len(repeat_sorted_cycles) - 1, 1))
                           for i in range(len(repeat_sorted_cycles))]
 
@@ -333,19 +344,13 @@ def plot_average_changed_weights_vs_perturbation(
         handles_r = []
         for n_cycles, colour in zip(repeat_sorted_cycles, repeat_colours):
             perturbations, n_changed = repeat_data[n_cycles]
-            line, = ax_r.plot(perturbations, n_changed, color=colour, marker="o",
-                              markersize=4, linewidth=1.5, label=f"{n_cycles} write cycles")
+            line, = ax_r.plot(perturbations, n_changed, color=colour,
+                              linewidth=1.5, label=f"{n_cycles} write cycles")
             handles_r.append(line)
-
-        if len(handles_r) > 5:
-            indices = [round(i * (len(handles_r) - 1) / 4) for i in range(5)]
-            legend_handles_r = [handles_r[i] for i in indices]
-        else:
-            legend_handles_r = handles_r
 
         ax_r.set_xlabel("Perturbation size")
         ax_r.set_ylabel("Number of changed weights")
-        ax_r.legend(handles=legend_handles_r, fontsize=8, loc="best")
+        ax_r.legend(handles=handles_r, fontsize=8, loc="best")
         fig_r.tight_layout()
 
         repeat_run_dir = os.path.abspath(f"{run_base}_r{r}")
@@ -665,6 +670,21 @@ def main() -> None:
              "(used by: average_changed_weights_vs_perturbation, default: 0.0)",
     )
     parser.add_argument(
+        "--p_label_flip",
+        type=float,
+        default=0.0,
+        help="Label flip probability used during write_memory. When > 0, appends "
+             "_flip<p_label_flip:.0e> to the cyclic_memory directory suffix. "
+             "(used by: average_changed_weights_vs_perturbation, default: 0.0)",
+    )
+    parser.add_argument(
+        "--legend_only",
+        action="store_true",
+        default=False,
+        help="Plot only the 5 evenly-spaced write-cycle counts shown in the legend "
+             "(used by: average_changed_weights_vs_perturbation)",
+    )
+    parser.add_argument(
         "--out",
         type=str,
         default=None,
@@ -697,6 +717,8 @@ def main() -> None:
         plot_average_changed_weights_vs_perturbation(
             args.run_base, args.repeats, args.perturbation_str, out, args.epsilon,
             label_noise_std=args.label_noise_std,
+            p_label_flip=args.p_label_flip,
+            legend_only=args.legend_only,
         )
     elif args.plot == "test_loss_vs_write_cycles":
         plot_test_loss_vs_write_cycles(args.cyclic_dir, out_path=out)
@@ -718,13 +740,21 @@ if __name__ == "__main__":
     # main()
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
-    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
+    # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
+    perturbation_string = "1e-03"
     eps = 5e-7
-    label_noise_std = 1e-02
-    if label_noise_std == 0.0:
-        outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_eps{}.pdf'.format(perturbation_string, eps))
+    label_noise_std = 0.0
+    p_label_flip = 0.0
+    legend_only = True
+    noise_suffix = ""
+    if label_noise_std != 0.0:
+        noise_suffix += f"_noise{label_noise_std}"
+    if p_label_flip != 0.0:
+        noise_suffix += f"_flip{p_label_flip}"
+    if legend_only:
+        outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}{}_eps{}_5lines.pdf'.format(perturbation_string, noise_suffix, eps))
     else:
-        outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}_noise{}_eps{}.pdf'.format(perturbation_string, label_noise_std, eps))
+        outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}{}_eps{}.pdf'.format(perturbation_string, noise_suffix, eps))
 
     plot_average_changed_weights_vs_perturbation(
         run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
@@ -732,7 +762,9 @@ if __name__ == "__main__":
         perturbation_str=perturbation_string,
         out_path=outpath,
         epsilon=eps,
-        label_noise_std=label_noise_std
+        label_noise_std=label_noise_std,
+        p_label_flip=p_label_flip,
+        legend_only=legend_only
     )
 
     # Single run (r0)

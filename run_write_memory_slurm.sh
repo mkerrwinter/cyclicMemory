@@ -30,6 +30,7 @@ WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 START_CYCLE=0
 LABEL_NOISE_STD=1e-4
+P_LABEL_FLIP=0
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -67,6 +68,7 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
             --N_cycles $N_CYCLES \
             --start_cycle $START_CYCLE \
             --label_noise_std $LABEL_NOISE_STD \
+            --p_label_flip $P_LABEL_FLIP \
             --save_freq $SAVE_FREQ \
             --input_dim $INPUT_DIM \
             --width $WIDTH \

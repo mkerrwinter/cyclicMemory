@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
 # run_read_memory_slurm.sh
 # ------------------------
-# Submits one SLURM job per write-cycle checkpoint found in a model's
+# Submits one SLURM job per write-cycle checkpoint found in each model's
 # cyclic_memory_<WRITE_PERTURBATION>/ directory, each running read_memory via
 # read_write.py.
 #
 # Usage: bash run_read_memory_slurm.sh
 
 # ---- Edit these -----------------------------------------------------------
-# The model directory that was written by run_write_memory_slurm.sh.
-MODEL_DIR="/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0"
+# List the model directories to read (mirrors MODEL_DIRS in run_write_memory_slurm.sh)
+MODEL_DIRS=(
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r2"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r3"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r4"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r5"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r6"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r7"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r8"
+)
 
 # Read parameters (defaults from read_write.py unless you want to override)
 MAX_PERTURBATION=1.5e-3   # largest perturbation amplitude to probe
@@ -35,7 +44,8 @@ TIME=12:00:00
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CODE_DIR="$SCRIPT_DIR/cyclicMemory"
-ABS_MODEL_DIR="$MODEL_DIR"
+LOGS_DIR="$SCRIPT_DIR/slurm_logs"
+mkdir -p "$LOGS_DIR"
 
 DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_LABEL_FLIP" "${WRITE_PERTURBATION[@]}" <<'PY'
 import sys
@@ -53,65 +63,62 @@ print(suffix)
 PY
 )"
 
-CYCLIC_MEMORY_DIR="$ABS_MODEL_DIR/cyclic_memory_${DIR_SUFFIX}"
-LOGS_DIR="$SCRIPT_DIR/slurm_logs"
-mkdir -p "$LOGS_DIR"
-
-# Sanity check
-if [ ! -d "$CYCLIC_MEMORY_DIR" ]; then
-    echo "ERROR: cyclic_memory directory not found: $CYCLIC_MEMORY_DIR"
-    exit 1
-fi
-
-CHECKPOINTS=( "$CYCLIC_MEMORY_DIR"/model_cycle*.pt )
-if [ ${#CHECKPOINTS[@]} -eq 0 ] || [ ! -f "${CHECKPOINTS[0]}" ]; then
-    echo "ERROR: No model_cycle*.pt files found in $CYCLIC_MEMORY_DIR"
-    exit 1
-fi
-
-echo "Found ${#CHECKPOINTS[@]} checkpoint(s) in: $CYCLIC_MEMORY_DIR"
 echo "Submitting read_memory SLURM jobs..."
+echo "  cyclic_memory suffix: ${DIR_SUFFIX}"
 echo ""
 
-for CKPT in "${CHECKPOINTS[@]}"; do
-    FNAME=$(basename "$CKPT" .pt)           # e.g. model_cycle00880
-    CYCLE_STR="${FNAME#model_cycle}"        # e.g. 00880
-    CYCLE_NUM=$((10#$CYCLE_STR))            # strip leading zeros → integer
+for MODEL_DIR in "${MODEL_DIRS[@]}"; do
+    CYCLIC_MEMORY_DIR="$MODEL_DIR/cyclic_memory_${DIR_SUFFIX}"
 
-    RUN_NAME="read_$(echo "$MODEL_DIR" | tr '/' '_')_c${CYCLE_NUM}"
+    if [ ! -d "$CYCLIC_MEMORY_DIR" ]; then
+        echo "  WARNING: cyclic_memory directory not found, skipping: $CYCLIC_MEMORY_DIR"
+        continue
+    fi
 
-    JOB_ID=$(sbatch --parsable \
-        --job-name="$RUN_NAME" \
-        --partition="$PARTITION" \
-        --cpus-per-task="$CPUS" \
-        --mem="$MEM" \
-        --time="$TIME" \
-        --output="$LOGS_DIR/${RUN_NAME}_%j.out" \
-        --error="$LOGS_DIR/${RUN_NAME}_%j.err" \
-        --wrap="cd '$SCRIPT_DIR' && poetry run python '$CODE_DIR/read_write.py' read \
-            --model_dir '$ABS_MODEL_DIR' \
-            --n_write_cycles $CYCLE_NUM \
-            --write_perturbation ${WRITE_PERTURBATION[*]} \
-            --max_perturbation $MAX_PERTURBATION \
-            --epsilon $EPSILON \
-            --dW $DW \
-            --label_noise_std $LABEL_NOISE_STD \
-            --p_label_flip $P_LABEL_FLIP \
-            --lr $LR \
-            --n_gd_steps $N_GD_STEPS \
-            --input_dim $INPUT_DIM \
-            --width $WIDTH \
-            --n_workers $CPUS \
-            --data_dir '$DATA_DIR'")
+    CHECKPOINTS=( "$CYCLIC_MEMORY_DIR"/model_cycle*.pt )
+    if [ ${#CHECKPOINTS[@]} -eq 0 ] || [ ! -f "${CHECKPOINTS[0]}" ]; then
+        echo "  WARNING: No model_cycle*.pt files found in $CYCLIC_MEMORY_DIR, skipping."
+        continue
+    fi
 
-    echo "  Submitted job $JOB_ID → cycle $CYCLE_NUM  ($CKPT)"
+    echo "  Found ${#CHECKPOINTS[@]} checkpoint(s) in: $CYCLIC_MEMORY_DIR"
+
+    for CKPT in "${CHECKPOINTS[@]}"; do
+        FNAME=$(basename "$CKPT" .pt)           # e.g. model_cycle00880
+        CYCLE_STR="${FNAME#model_cycle}"        # e.g. 00880
+        CYCLE_NUM=$((10#$CYCLE_STR))            # strip leading zeros → integer
+
+        RUN_NAME="read_$(echo "$MODEL_DIR" | tr '/' '_')_c${CYCLE_NUM}"
+
+        JOB_ID=$(sbatch --parsable \
+            --job-name="$RUN_NAME" \
+            --partition="$PARTITION" \
+            --cpus-per-task="$CPUS" \
+            --mem="$MEM" \
+            --time="$TIME" \
+            --output="$LOGS_DIR/${RUN_NAME}_%j.out" \
+            --error="$LOGS_DIR/${RUN_NAME}_%j.err" \
+            --wrap="cd '$SCRIPT_DIR' && poetry run python '$CODE_DIR/read_write.py' read \
+                --model_dir '$MODEL_DIR' \
+                --n_write_cycles $CYCLE_NUM \
+                --write_perturbation ${WRITE_PERTURBATION[*]} \
+                --max_perturbation $MAX_PERTURBATION \
+                --epsilon $EPSILON \
+                --dW $DW \
+                --label_noise_std $LABEL_NOISE_STD \
+                --p_label_flip $P_LABEL_FLIP \
+                --lr $LR \
+                --n_gd_steps $N_GD_STEPS \
+                --input_dim $INPUT_DIM \
+                --width $WIDTH \
+                --n_workers $CPUS \
+                --data_dir '$DATA_DIR'")
+
+        echo "    Submitted job $JOB_ID → cycle $CYCLE_NUM  ($CKPT)"
+    done
+    echo ""
 done
 
-echo ""
 echo "All jobs submitted. Monitor with: squeue -u \$USER"
 echo "Logs in: $LOGS_DIR"
-echo ""
-echo "Checkpoint directory: $CYCLIC_MEMORY_DIR"
-echo "Results will be written to: $ABS_MODEL_DIR/cyclic_memory"
-echo "  Files: read_memory_cycles{N:05d}_eps${EPSILON}.csv"
 

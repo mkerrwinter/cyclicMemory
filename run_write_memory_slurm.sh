@@ -29,8 +29,8 @@ INPUT_DIM=10
 WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 START_CYCLE=0
-LABEL_NOISE_STD=1e-4
-P_LABEL_FLIP=0
+LABEL_NOISE_STD=0.0
+P_LABEL_FLIP=0.01
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

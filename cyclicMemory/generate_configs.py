@@ -28,6 +28,7 @@ def generate_configs(
     lrs:           list[float] = (0.01, 0.001),
     batch_sizes:   list[int]   = (32, 128),
     n_repeats:     int         = 5,
+    repeat_start:  int         = 0,
     n_epochs:      int         = 500,
     log_every:     int         = 10,
     momentum:      float       = 0.0,
@@ -46,7 +47,7 @@ def generate_configs(
     if dataset not in ("random", "mnist"):
         raise ValueError(f"dataset must be 'random' or 'mnist', got '{dataset}'")
 
-    combos = list(itertools.product(widths, lrs, batch_sizes, range(n_repeats)))
+    combos = list(itertools.product(widths, lrs, batch_sizes, range(repeat_start, repeat_start + n_repeats)))
     print(f"Generating {len(combos)} config file(s) in '{out_dir}/'")
 
     for width, lr, batch_size, repeat in combos:
@@ -92,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument("--lrs",          type=float, nargs="+", default=[0.01, 0.001])
     parser.add_argument("--batch_sizes",  type=int,   nargs="+", default=[32])
     parser.add_argument("--n_repeats",    type=int,   default=5)
+    parser.add_argument("--repeat_start", type=int,   default=0)
     parser.add_argument("--n_epochs",     type=int,   default=500)
     parser.add_argument("--log_every",    type=int,   default=10)
     parser.add_argument("--momentum",     type=float, default=0.0)
@@ -108,6 +110,7 @@ if __name__ == "__main__":
         lrs          = args.lrs,
         batch_sizes  = args.batch_sizes,
         n_repeats    = args.n_repeats,
+        repeat_start = args.repeat_start,
         n_epochs     = args.n_epochs,
         log_every    = args.log_every,
         momentum     = args.momentum,

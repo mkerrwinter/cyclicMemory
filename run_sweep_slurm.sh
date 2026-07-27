@@ -12,7 +12,8 @@ DATASET="mnist"   # "random" or "mnist"
 
 # Defaults
 BATCH_SIZES=(32)
-N_REPEATS=10
+N_REPEATS=40
+REPEAT_START=10
 N_EPOCHS=10000
 LOG_EVERY=100
 N_TRAIN=5000
@@ -31,6 +32,7 @@ poetry run python "$CODE_DIR/generate_configs.py" \
     --lrs          "${LRS[@]}" \
     --batch_sizes  "${BATCH_SIZES[@]}" \
     --n_repeats    "$N_REPEATS" \
+    --repeat_start "$REPEAT_START" \
     --n_epochs     "$N_EPOCHS" \
     --log_every    "$LOG_EVERY" \
     --n_train      "$N_TRAIN" \

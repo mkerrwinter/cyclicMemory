@@ -45,7 +45,10 @@ poetry run python "$CODE_DIR/generate_configs.py" \
 echo ""
 echo "Moving configs to $CONFIG_DIR..."
 mkdir -p "$CONFIG_DIR"
-mv "$TEMP_CONFIG_DIR"/*.yaml "$CONFIG_DIR"/
+
+# Capture exactly which files were generated before moving them
+GENERATED_CONFIGS=("$TEMP_CONFIG_DIR"/*.yaml)
+mv "${GENERATED_CONFIGS[@]}" "$CONFIG_DIR"/
 rmdir "$TEMP_CONFIG_DIR"
 
 echo ""
@@ -54,13 +57,9 @@ echo "Submitting SLURM jobs..."
 LOGS_DIR="$SCRIPT_DIR/slurm_logs"
 mkdir -p "$LOGS_DIR"
 
-for CONFIG_FILE in "${MOVED_CONFIGS[@]}"; do
-    # Collect configs that were just moved
-    :
-done
-
-# Re-glob from CONFIG_DIR using the names we just generated
-for CONFIG_FILE in "$CONFIG_DIR"/*.yaml; do
+# Only submit the configs that were just generated
+for CONFIG_FILE in "${GENERATED_CONFIGS[@]}"; do
+    CONFIG_FILE="$CONFIG_DIR/$(basename "$CONFIG_FILE")"
     RUN_NAME="$(basename "$CONFIG_FILE" .yaml)"
 
     JOB_ID=$(sbatch --parsable \

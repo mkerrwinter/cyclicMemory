@@ -740,12 +740,12 @@ if __name__ == "__main__":
     # main()
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
-    # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
-    perturbation_string = "1e-03"
+    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
+    # perturbation_string = "1e-03"
     eps = 5e-7
     label_noise_std = 0.0
-    p_label_flip = 0.0
-    legend_only = True
+    p_label_flip = 0.01
+    legend_only = False
     noise_suffix = ""
     if label_noise_std != 0.0:
         noise_suffix += f"_noise{label_noise_std}"

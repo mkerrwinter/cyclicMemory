@@ -229,7 +229,7 @@ def plot_average_changed_weights_vs_perturbation(
     out_path: str = None,
     epsilon: float = 1e-5,
     label_noise_std: float = 0.0,
-    p_label_flip: float = 0.0,
+    p_delta_flip: float = 0.0,
     legend_only: bool = False,
 ) -> None:
     """
@@ -250,7 +250,7 @@ def plot_average_changed_weights_vs_perturbation(
                       cyclic_memory_<perturbation_str>_noise<label_noise_std:.0e>
                       instead of cyclic_memory_<perturbation_str>. Must match the
                       value used when write_memory was called.
-    p_label_flip    : if > 0, also appends _flip<p_label_flip:.0e> to the
+    p_delta_flip    : if > 0, also appends _flip<p_delta_flip:.0e> to the
                       directory suffix. Must match the value used when
                       write_memory was called.
     legend_only     : if True, plot only the 5 write-cycle counts that appear in
@@ -260,8 +260,8 @@ def plot_average_changed_weights_vs_perturbation(
     dir_suffix = perturbation_str
     if label_noise_std != 0.0:
         dir_suffix += f"_noise{label_noise_std:.0e}"
-    if p_label_flip != 0.0:
-        dir_suffix += f"_flip{p_label_flip:.0e}"
+    if p_delta_flip != 0.0:
+        dir_suffix += f"_flip{p_delta_flip:.0e}"
 
     # Collect n_changed arrays per repeat, keyed by n_cycles
     # Structure: {n_cycles: [ [n_changed_per_perturbation_step], ... ]}
@@ -670,11 +670,11 @@ def main() -> None:
              "(used by: average_changed_weights_vs_perturbation, default: 0.0)",
     )
     parser.add_argument(
-        "--p_label_flip",
+        "--p_delta_flip",
         type=float,
         default=0.0,
-        help="Label flip probability used during write_memory. When > 0, appends "
-             "_flip<p_label_flip:.0e> to the cyclic_memory directory suffix. "
+        help="Delta flip probability used during write_memory. When > 0, appends "
+             "_flip<p_delta_flip:.0e> to the cyclic_memory directory suffix. "
              "(used by: average_changed_weights_vs_perturbation, default: 0.0)",
     )
     parser.add_argument(
@@ -717,7 +717,7 @@ def main() -> None:
         plot_average_changed_weights_vs_perturbation(
             args.run_base, args.repeats, args.perturbation_str, out, args.epsilon,
             label_noise_std=args.label_noise_std,
-            p_label_flip=args.p_label_flip,
+            p_delta_flip=args.p_delta_flip,
             legend_only=args.legend_only,
         )
     elif args.plot == "test_loss_vs_write_cycles":
@@ -744,13 +744,13 @@ if __name__ == "__main__":
     # perturbation_string = "1e-03"
     eps = 5e-7
     label_noise_std = 0.0
-    p_label_flip = 0.01
+    p_delta_flip = 0.001
     legend_only = False
     noise_suffix = ""
     if label_noise_std != 0.0:
         noise_suffix += f"_noise{label_noise_std}"
-    if p_label_flip != 0.0:
-        noise_suffix += f"_flip{p_label_flip}"
+    if p_delta_flip != 0.0:
+        noise_suffix += f"_flip{p_delta_flip}"
     if legend_only:
         outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}{}_eps{}_5lines.pdf'.format(perturbation_string, noise_suffix, eps))
     else:
@@ -763,7 +763,7 @@ if __name__ == "__main__":
         out_path=outpath,
         epsilon=eps,
         label_noise_std=label_noise_std,
-        p_label_flip=p_label_flip,
+        p_delta_flip=p_delta_flip,
         legend_only=legend_only
     )
 

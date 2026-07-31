@@ -49,9 +49,12 @@ def load_datasets(data_dir: str = DATA_DIR):
     return train_ds, test_ds
 
 
-def make_quadratic_hinge_loss():
+def make_quadratic_hinge_loss(p_delta_flip: float = 0.0):
     def quadratic_hinge(output, target):
         Delta = 1.0 - target * output
+        if p_delta_flip > 0.0:
+            flip_mask = torch.bernoulli(torch.full_like(Delta, p_delta_flip)).bool()
+            Delta = torch.where(flip_mask, -Delta, Delta)
         zeros = torch.zeros_like(Delta)
 
         max_Delta = torch.max(zeros, Delta)

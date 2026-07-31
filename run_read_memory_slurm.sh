@@ -33,7 +33,7 @@ INPUT_DIM=10
 WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=0.0
-P_LABEL_FLIP=0.001
+P_DELTA_FLIP=0.001
 
 # SLURM resource settings
 PARTITION=fat_rome
@@ -47,7 +47,7 @@ CODE_DIR="$SCRIPT_DIR/cyclicMemory"
 LOGS_DIR="$SCRIPT_DIR/slurm_logs"
 mkdir -p "$LOGS_DIR"
 
-DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_LABEL_FLIP" "${WRITE_PERTURBATION[@]}" <<'PY'
+DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_DELTA_FLIP" "${WRITE_PERTURBATION[@]}" <<'PY'
 import sys
 
 noise_std = float(sys.argv[1])
@@ -106,7 +106,7 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
                 --epsilon $EPSILON \
                 --dW $DW \
                 --label_noise_std $LABEL_NOISE_STD \
-                --p_label_flip $P_LABEL_FLIP \
+                --p_delta_flip $P_DELTA_FLIP \
                 --lr $LR \
                 --n_gd_steps $N_GD_STEPS \
                 --input_dim $INPUT_DIM \

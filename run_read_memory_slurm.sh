@@ -69,7 +69,7 @@ INPUT_DIM=10
 WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=0.0
-P_DELTA_FLIP=1e-2
+P_DELTA_FLIP=1e-3
 
 # SLURM resource settings
 PARTITION=fat_rome

@@ -269,7 +269,7 @@ def write_memory(
             f"({elapsed_cycle:.1f}s/cycle, {elapsed_total:.1f}s total)"
         )
 
-        if cycle % save_freq == 0:
+        if cycle <= 10 or cycle % save_freq == 0:
             save_cycle(cycle)
 
     print(f"\nWrite-memory complete. Total time: {time.time() - t_total:.1f}s")

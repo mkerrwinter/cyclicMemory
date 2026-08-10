@@ -87,8 +87,8 @@ CPU_PARTITION=fat_rome
 GPU_PARTITION=gpu_a100
 CPU_CPUS=16       # fat_rome minimum allocation; all used as parallel probe workers
 GPU_CPUS=18       # one full GPU share on gpu_a100 (1 GPU + 18 CPU cores); used as workers
-CPU_MEM=8G
-GPU_MEM=32G
+CPU_MEM=2G
+GPU_MEM=2G
 CPU_TIME=12:00:00
 GPU_TIME=12:00:00
 # ---------------------------------------------------------------------------
@@ -144,48 +144,40 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
         continue
     fi
 
-    CHECKPOINTS=( "$CYCLIC_MEMORY_DIR"/model_cycle*.pt )
-    if [ ${#CHECKPOINTS[@]} -eq 0 ] || [ ! -f "${CHECKPOINTS[0]}" ]; then
+    N_CKPTS=$(ls "$CYCLIC_MEMORY_DIR"/model_cycle*.pt 2>/dev/null | wc -l)
+    if [ "$N_CKPTS" -eq 0 ]; then
         echo "  WARNING: No model_cycle*.pt files found in $CYCLIC_MEMORY_DIR, skipping."
         continue
     fi
 
-    echo "  Found ${#CHECKPOINTS[@]} checkpoint(s) in: $CYCLIC_MEMORY_DIR"
+    RUN_NAME="read_$(echo "$MODEL_DIR" | tr '/' '_')"
 
-    for CKPT in "${CHECKPOINTS[@]}"; do
-        FNAME=$(basename "$CKPT" .pt)           # e.g. model_cycle00880
-        CYCLE_STR="${FNAME#model_cycle}"        # e.g. 00880
-        CYCLE_NUM=$((10#$CYCLE_STR))            # strip leading zeros → integer
+    JOB_ID=$(sbatch --parsable \
+        --job-name="$RUN_NAME" \
+        --partition="$PARTITION" \
+        --cpus-per-task="$CPUS" \
+        --mem="$MEM" \
+        --time="$TIME" \
+        $EXTRA_SLURM_ARGS \
+        --output="$LOGS_DIR/${RUN_NAME}_%j.out" \
+        --error="$LOGS_DIR/${RUN_NAME}_%j.err" \
+        --wrap="cd '$SCRIPT_DIR' && poetry run python '$CODE_DIR/read_write.py' read \
+            --model_dir '$MODEL_DIR' \
+            --write_perturbation ${WRITE_PERTURBATION[*]} \
+            --max_perturbation $MAX_PERTURBATION \
+            --epsilon $EPSILON \
+            --dW $DW \
+            --label_noise_std $LABEL_NOISE_STD \
+            --p_delta_flip $P_DELTA_FLIP \
+            --weight_noise_std $WEIGHT_NOISE_STD \
+            --lr $LR \
+            --n_gd_steps $N_GD_STEPS \
+            --input_dim $INPUT_DIM \
+            --width $WIDTH \
+            --n_workers $CPUS \
+            --data_dir '$DATA_DIR'")
 
-        RUN_NAME="read_$(echo "$MODEL_DIR" | tr '/' '_')_c${CYCLE_NUM}"
-
-        JOB_ID=$(sbatch --parsable \
-            --job-name="$RUN_NAME" \
-            --partition="$PARTITION" \
-            --cpus-per-task="$CPUS" \
-            --mem="$MEM" \
-            --time="$TIME" \
-            $EXTRA_SLURM_ARGS \
-            --output="$LOGS_DIR/${RUN_NAME}_%j.out" \
-            --error="$LOGS_DIR/${RUN_NAME}_%j.err" \
-            --wrap="cd '$SCRIPT_DIR' && poetry run python '$CODE_DIR/read_write.py' read \
-                --model_dir '$MODEL_DIR' \
-                --n_write_cycles $CYCLE_NUM \
-                --write_perturbation ${WRITE_PERTURBATION[*]} \
-                --max_perturbation $MAX_PERTURBATION \
-                --epsilon $EPSILON \
-                --dW $DW \
-                --label_noise_std $LABEL_NOISE_STD \
-                --p_delta_flip $P_DELTA_FLIP \
-                --weight_noise_std $WEIGHT_NOISE_STD \
-                --lr $LR \
-                --n_gd_steps $N_GD_STEPS \
-                --input_dim $INPUT_DIM \
-                --width $WIDTH \
-                --n_workers $CPUS \
-                --data_dir '$DATA_DIR'")
-        echo "    Submitted job $JOB_ID → cycle $CYCLE_NUM  ($CKPT)"
-    done
+    echo "  Submitted job $JOB_ID → $RUN_NAME  ($N_CKPTS checkpoint(s))"
     echo ""
 done
 

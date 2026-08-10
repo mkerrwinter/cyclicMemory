@@ -87,8 +87,8 @@ CPU_PARTITION=fat_rome
 GPU_PARTITION=gpu_a100
 CPU_CPUS=16
 GPU_CPUS=18        # one full GPU share on gpu_a100 (1 GPU + 18 CPU cores)
-CPU_MEM=8G
-GPU_MEM=32G
+CPU_MEM=2G
+GPU_MEM=2G
 CPU_TIME=24:00:00
 GPU_TIME=24:00:00
 # ---------------------------------------------------------------------------

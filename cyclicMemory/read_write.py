@@ -286,8 +286,14 @@ def write_memory(
             f"({elapsed_cycle:.1f}s/cycle, {elapsed_total:.1f}s total)"
         )
 
-        if cycle <= 10 or cycle % save_freq == 0:
+        if cycle <= 10:
             save_cycle(cycle)
+        elif cycle <= 20 * save_freq:
+            if cycle % save_freq == 0:
+                save_cycle(cycle)
+        else:
+            if cycle % (5 * save_freq) == 0:
+                save_cycle(cycle)
 
     print(f"\nWrite-memory complete. Total time: {time.time() - t_total:.1f}s")
     print(f"Checkpoints in: {output_dir}")
@@ -341,28 +347,35 @@ def _probe_worker(args: tuple) -> tuple:
 # ---------------------------------------------------------------------------
 
 def read_memory(
-    model_dir:        str,
-    n_write_cycles:   int,
+    model_dir:          str,
     write_perturbation: list[float],
-    max_perturbation: float,
-    epsilon:          float  = 1e-5,
-    dW:               float  = DEFAULT_DW,
-    lr:               float  = DEFAULT_LR,
-    n_gd_steps:       int    = DEFAULT_N_STEPS,
-    label_noise_std:  float  = 0.0,
-    p_delta_flip:     float  = 0.0,
-    weight_noise_std: float  = 0.0,
-    input_dim:        int    = 10,
-    width:            int    = 10,
-    data_dir:         str    = DATA_DIR,
-    n_workers:        int    = 1,
+    max_perturbation:   float,
+    n_write_cycles:     int | None = None,
+    epsilon:            float  = 1e-5,
+    dW:                 float  = DEFAULT_DW,
+    lr:                 float  = DEFAULT_LR,
+    n_gd_steps:         int    = DEFAULT_N_STEPS,
+    label_noise_std:    float  = 0.0,
+    p_delta_flip:       float  = 0.0,
+    weight_noise_std:   float  = 0.0,
+    input_dim:          int    = 10,
+    width:              int    = 10,
+    data_dir:           str    = DATA_DIR,
+    n_workers:          int    = 1,
 ) -> None:
     """
-    Read a memory from a network that has undergone cyclic write perturbations.
+    Read memories from a network that has undergone cyclic write perturbations.
 
-    The checkpoint is loaded from:
-        <model_dir>/cyclic_memory/model_cycle{n_write_cycles:05d}.pt
-    i.e. one of the files written by write_memory's save_cycle.
+    Checkpoints are loaded from:
+        <model_dir>/cyclic_memory_<suffix>/model_cycle{N:05d}.pt
+
+    When n_write_cycles is None (default), all model_cycle*.pt files found in
+    the cyclic_memory directory are processed sequentially within a single call,
+    with the training data loaded only once. When n_write_cycles is an integer,
+    only that single checkpoint is processed.
+
+    Already-completed checkpoints (both output CSVs present) are skipped,
+    making the function safe to re-run after a partial failure.
 
     For each perturbation size p = dW, 2*dW, ..., max_perturbation:
       - Take a fresh copy of the original (written) network.
@@ -371,42 +384,37 @@ def read_memory(
       - Count how many weights changed by more than `epsilon` relative to
         the original network.
 
-    All perturbation-size probes are independent and are dispatched to
-    `n_workers` parallel processes via multiprocessing.Pool. Each worker
-    calls torch.set_num_threads(1) to avoid over-subscription; set
-    n_workers equal to the number of CPUs allocated to the job.
-
-    Saves a CSV of (perturbation_size, n_changed_weights) in the same
-    cyclic_memory directory, with the number of write cycles in the filename.
-    Also saves the full delta-weight vectors in a separate CSV in the same
-    directory. The delta-weight filename does not include epsilon.
+    All perturbation-size probes for a given checkpoint are independent and are
+    dispatched to `n_workers` parallel processes via multiprocessing.Pool.
 
     Parameters
     ----------
-    model_dir        : base directory of the trained model (contains model.pt
-                       and the cyclic_memory/ subdirectory)
-    n_write_cycles   : number of write cycles — selects which checkpoint to load
+    model_dir          : base directory of the trained model (contains model.pt
+                         and the cyclic_memory/ subdirectory)
     write_perturbation : list of perturbation amplitudes used during writing
-    max_perturbation : largest perturbation amplitude to probe
-    epsilon          : weight-change threshold for counting a weight as "changed"
-    dW               : single weight-perturbation step size
-    lr               : learning rate for full-batch GD
-    n_gd_steps       : number of GD steps after each ±dW nudge
-    label_noise_std  : label noise std used during writing — used to resolve the
-                       correct cyclic_memory directory (default: 0.0)
-    p_delta_flip     : delta flip probability used during writing — used to
-                       resolve the correct cyclic_memory directory (default: 0.0)
-    weight_noise_std : weight noise std used during writing — used to resolve the
-                       correct cyclic_memory directory (default: 0.0)
-    input_dim        : input dimension of the network
-    width            : hidden layer width of the network
-    data_dir         : directory containing train_dataset.pt
-    n_workers        : number of parallel worker processes (default: 1)
+    max_perturbation   : largest perturbation amplitude to probe
+    n_write_cycles     : cycle number to read, or None to process all checkpoints
+                         found in the cyclic_memory directory (default: None)
+    epsilon            : weight-change threshold for counting a weight as "changed"
+    dW                 : single weight-perturbation step size
+    lr                 : learning rate for full-batch GD
+    n_gd_steps         : number of GD steps after each ±dW nudge
+    label_noise_std    : label noise std used during writing — used to resolve the
+                         correct cyclic_memory directory (default: 0.0)
+    p_delta_flip       : delta flip probability used during writing — used to
+                         resolve the correct cyclic_memory directory (default: 0.0)
+    weight_noise_std   : weight noise std used during writing — used to resolve the
+                         correct cyclic_memory directory (default: 0.0)
+    input_dim          : input dimension of the network
+    width              : hidden layer width of the network
+    data_dir           : directory containing train_dataset.pt
+    n_workers          : number of parallel worker processes (default: 1)
     """
+    import glob as _glob
 
     device = torch.device("cpu")
 
-    # ---- resolve checkpoint path from model_dir + n_write_cycles -----------
+    # ---- resolve cyclic_memory directory ------------------------------------
     perturbation_str = "_".join(f"{A:.0e}" for A in write_perturbation)
     dir_suffix = perturbation_str
     if label_noise_std != 0.0:
@@ -416,114 +424,133 @@ def read_memory(
     if weight_noise_std != 0.0:
         dir_suffix += f"_wnoise{weight_noise_std:.0e}"
     memory_dir = os.path.join(model_dir, f"cyclic_memory_{dir_suffix}")
-    model_path = os.path.join(
-        memory_dir, f"model_cycle{n_write_cycles:05d}.pt"
-    )
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(
-            f"No checkpoint found at '{model_path}'. "
-            f"Has write_memory been run for {n_write_cycles} cycle(s)?"
-        )
 
-    # ---- data ---------------------------------------------------------------
+    # ---- determine which cycle numbers to process ---------------------------
+    if n_write_cycles is None:
+        ckpt_files = sorted(_glob.glob(os.path.join(memory_dir, "model_cycle*.pt")))
+        if not ckpt_files:
+            raise FileNotFoundError(
+                f"No model_cycle*.pt checkpoints found in '{memory_dir}'. "
+                "Has write_memory been run?"
+            )
+        cycle_numbers = [
+            int(os.path.basename(f)[len("model_cycle"):-len(".pt")])
+            for f in ckpt_files
+        ]
+        print(f"Found {len(cycle_numbers)} checkpoint(s) in: {memory_dir}")
+    else:
+        model_path = os.path.join(memory_dir, f"model_cycle{n_write_cycles:05d}.pt")
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(
+                f"No checkpoint found at '{model_path}'. "
+                f"Has write_memory been run for {n_write_cycles} cycle(s)?"
+            )
+        cycle_numbers = [n_write_cycles]
+
+    # ---- load training data once (shared across all checkpoints) ------------
     print("Loading training data...")
     X_all, y_all = _load_full_batch(data_dir, device)
     print(f"  {X_all.shape[0]} samples, dim={X_all.shape[1]}")
 
-    # ---- load the written network as the fixed reference --------------------
-    original_model = FCNN(input_dim=input_dim, width=width).to(device)
-    state = torch.load(model_path, map_location=device, weights_only=True)
-    original_model.load_state_dict(state)
-    original_model.eval()
-    print(f"Loaded written network from: {model_path}")
-    print(f"  (network experienced {n_write_cycles} write cycle(s))")
-
-    # Flatten all original weights into a single reference vector
-    with torch.no_grad():
-        original_weights = torch.cat([p.detach().clone().flatten()
-                                      for p in original_model.parameters()])
-
-    loss_fn = make_quadratic_hinge_loss()
-
-    # ---- sweep over perturbation sizes --------------------------------------
+    loss_fn    = make_quadratic_hinge_loss()
     n_steps_max = _n_steps_for(max_perturbation, dW)
-    perturbation_sizes = [round((k + 1) * dW, 12) for k in range(n_steps_max)]
+    actual_workers = min(n_workers, n_steps_max)
 
     print(
         f"\nProbing {n_steps_max} perturbation size(s): "
         f"dW={dW} up to max={max_perturbation}  (epsilon={epsilon})\n"
-        f"Using {n_workers} parallel worker(s).\n"
+        f"Using {actual_workers} parallel worker(s).\n"
     )
 
-    # Build argument tuples — each probe is fully independent
-    worker_args = [
-        (k, original_model.state_dict(), original_weights,
-         dW, lr, n_gd_steps, input_dim, width, epsilon,
-         X_all, y_all)
-        for k in range(n_steps_max)
-    ]
+    # ---- process each checkpoint --------------------------------------------
+    import csv as _csv
 
-    t_total = time.time()
-    actual_workers = min(n_workers, n_steps_max)
+    t_total_all = time.time()
 
-    if actual_workers > 1:
-        # Parallel path: each worker uses 1 thread to avoid over-subscription
-        with mp.Pool(processes=actual_workers) as pool:
-            raw_results = pool.map(_probe_worker, worker_args)
-    else:
-        # Serial path (n_workers=1): run directly, no subprocess overhead
-        torch.set_num_threads(1)
-        raw_results = [_probe_worker(a) for a in worker_args]
-
-    # pool.map preserves order, but sort by k defensively
-    raw_results.sort(key=lambda r: r[0])
-
-    results = []
-    for k, p_size, n_changed, deltas in raw_results:
-        results.append((p_size, n_changed, deltas))
-        elapsed = time.time() - t_total
-        n_steps = k + 1
-        print(
-            f"  p={p_size:.4e}  (N={n_steps:>4} steps)  "
-            f"changed={n_changed}/{len(original_weights)}  "
-            f"({elapsed:.1f}s elapsed)"
+    for cycle_idx, cycle_num in enumerate(cycle_numbers):
+        model_path  = os.path.join(memory_dir, f"model_cycle{cycle_num:05d}.pt")
+        summary_csv = os.path.join(
+            memory_dir,
+            f"read_memory_cycles{cycle_num:05d}_eps{epsilon:.2e}.csv",
+        )
+        delta_csv = os.path.join(
+            memory_dir,
+            f"read_memory_cycles{cycle_num:05d}_deltas.csv",
         )
 
-    # ---- save results -------------------------------------------------------
-    n_weights = len(original_weights)
-    os.makedirs(memory_dir, exist_ok=True)
-    out_csv = os.path.join(
-        memory_dir,
-        f"read_memory_cycles{n_write_cycles:05d}_eps{epsilon:.2e}.csv",
+        print(
+            f"[{cycle_idx + 1}/{len(cycle_numbers)}] "
+            f"cycle {cycle_num} — checkpoint: {os.path.basename(model_path)}"
+        )
+
+        if os.path.exists(summary_csv) and os.path.exists(delta_csv):
+            print("  Output CSVs already exist, skipping.\n")
+            continue
+
+        # load this checkpoint
+        original_model = FCNN(input_dim=input_dim, width=width).to(device)
+        state = torch.load(model_path, map_location=device, weights_only=True)
+        original_model.load_state_dict(state)
+        original_model.eval()
+
+        with torch.no_grad():
+            original_weights = torch.cat([p.detach().clone().flatten()
+                                          for p in original_model.parameters()])
+
+        # build worker args and dispatch
+        worker_args = [
+            (k, original_model.state_dict(), original_weights,
+             dW, lr, n_gd_steps, input_dim, width, epsilon,
+             X_all, y_all)
+            for k in range(n_steps_max)
+        ]
+
+        t_cycle = time.time()
+
+        if actual_workers > 1:
+            with mp.Pool(processes=actual_workers) as pool:
+                raw_results = pool.map(_probe_worker, worker_args)
+        else:
+            torch.set_num_threads(1)
+            raw_results = [_probe_worker(a) for a in worker_args]
+
+        raw_results.sort(key=lambda r: r[0])
+
+        results = []
+        for k, p_size, n_changed, deltas in raw_results:
+            results.append((p_size, n_changed, deltas))
+            n_steps = k + 1
+            print(
+                f"  p={p_size:.4e}  (N={n_steps:>4} steps)  "
+                f"changed={n_changed}/{len(original_weights)}  "
+                f"({time.time() - t_cycle:.1f}s)"
+            )
+
+        # save results
+        n_weights = len(original_weights)
+        summary_header = ["perturbation_size", "n_changed_weights"]
+        delta_header   = ["perturbation_size"] + [f"delta_weight_{i}" for i in range(n_weights)]
+
+        with open(summary_csv, "w", newline="") as f:
+            writer = _csv.writer(f)
+            writer.writerow(summary_header)
+            for p_size, n_changed, _deltas in results:
+                writer.writerow([p_size, n_changed])
+
+        with open(delta_csv, "w", newline="") as f:
+            writer = _csv.writer(f)
+            writer.writerow(delta_header)
+            for p_size, _n_changed, deltas in results:
+                writer.writerow([p_size] + deltas)
+
+        print(f"  Saved → {summary_csv}")
+        print(f"  Saved → {delta_csv}\n")
+
+    print(
+        f"Read-memory complete. "
+        f"Processed {len(cycle_numbers)} checkpoint(s) in "
+        f"{time.time() - t_total_all:.1f}s total."
     )
-    import csv as _csv
-    summary_csv = os.path.join(
-        memory_dir,
-        f"read_memory_cycles{n_write_cycles:05d}_eps{epsilon:.2e}.csv",
-    )
-    delta_csv = os.path.join(
-        memory_dir,
-        f"read_memory_cycles{n_write_cycles:05d}_deltas.csv",
-    )
-
-    summary_header = ["perturbation_size", "n_changed_weights"]
-    delta_header = ["perturbation_size"] + [f"delta_weight_{i}" for i in range(n_weights)]
-
-    with open(summary_csv, "w", newline="") as f:
-        writer = _csv.writer(f)
-        writer.writerow(summary_header)
-        for p_size, n_changed, _deltas in results:
-            writer.writerow([p_size, n_changed])
-
-    with open(delta_csv, "w", newline="") as f:
-        writer = _csv.writer(f)
-        writer.writerow(delta_header)
-        for p_size, _n_changed, deltas in results:
-            writer.writerow([p_size] + deltas)
-
-    print(f"\nRead-memory complete. Total time: {time.time() - t_total:.1f}s")
-    print(f"Changed-weights results saved → {summary_csv}")
-    print(f"Delta-weights saved → {delta_csv}")
 
 
 # ---------------------------------------------------------------------------
@@ -600,8 +627,12 @@ if __name__ == "__main__":
         ),
     )
     p_read.add_argument(
-        "--n_write_cycles", type=int, required=True,
-        help="Number of write cycles — selects model_cycle{N:05d}.pt from cyclic_memory/",
+        "--n_write_cycles", type=int, default=None,
+        help=(
+            "Cycle number to read — selects model_cycle{N:05d}.pt from cyclic_memory/. "
+            "If omitted, all checkpoints found in the directory are processed "
+            "sequentially within this single job (recommended)."
+        ),
     )
     p_read.add_argument(
         "--write_perturbation", type=float, nargs="+", default=[1e-3], metavar="A",
@@ -660,19 +691,19 @@ if __name__ == "__main__":
         )
     elif args.command == "read":
         read_memory(
-            model_dir        = args.model_dir,
-            n_write_cycles   = args.n_write_cycles,
-            write_perturbation= args.write_perturbation,
-            max_perturbation = args.max_perturbation,
-            epsilon          = args.epsilon,
-            dW               = args.dW,
-            lr               = args.lr,
-            n_gd_steps       = args.n_gd_steps,
-            label_noise_std  = args.label_noise_std,
-            p_delta_flip     = args.p_delta_flip,
-            weight_noise_std = args.weight_noise_std,
-            input_dim        = args.input_dim,
-            width            = args.width,
-            data_dir         = args.data_dir,
-            n_workers        = args.n_workers,
+            model_dir          = args.model_dir,
+            write_perturbation = args.write_perturbation,
+            max_perturbation   = args.max_perturbation,
+            n_write_cycles     = args.n_write_cycles,
+            epsilon            = args.epsilon,
+            dW                 = args.dW,
+            lr                 = args.lr,
+            n_gd_steps         = args.n_gd_steps,
+            label_noise_std    = args.label_noise_std,
+            p_delta_flip       = args.p_delta_flip,
+            weight_noise_std   = args.weight_noise_std,
+            input_dim          = args.input_dim,
+            width              = args.width,
+            data_dir           = args.data_dir,
+            n_workers          = args.n_workers,
         )

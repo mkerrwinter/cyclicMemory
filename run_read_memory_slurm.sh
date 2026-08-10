@@ -78,12 +78,19 @@ WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=0.0
 P_DELTA_FLIP=0.0
+WEIGHT_NOISE_STD=0.0
 
 # SLURM resource settings
-PARTITION=fat_rome
-CPUS=16       # fat_rome minimum allocation; all 16 used as parallel probe workers
-MEM=8G
-TIME=12:00:00
+# Set USE_GPU=true to submit to gpu_a100 (bills GPU SBUs); false for fat_rome (CPU SBUs).
+USE_GPU=true
+CPU_PARTITION=fat_rome
+GPU_PARTITION=gpu_a100
+CPU_CPUS=16       # fat_rome minimum allocation; all used as parallel probe workers
+GPU_CPUS=18       # one full GPU share on gpu_a100 (1 GPU + 18 CPU cores); used as workers
+CPU_MEM=8G
+GPU_MEM=32G
+CPU_TIME=12:00:00
+GPU_TIME=12:00:00
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -91,23 +98,41 @@ CODE_DIR="$SCRIPT_DIR/cyclicMemory"
 LOGS_DIR="$SCRIPT_DIR/slurm_logs"
 mkdir -p "$LOGS_DIR"
 
-DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_DELTA_FLIP" "${WRITE_PERTURBATION[@]}" <<'PY'
+if [ "$USE_GPU" = true ]; then
+    PARTITION=$GPU_PARTITION
+    CPUS=$GPU_CPUS
+    MEM=$GPU_MEM
+    TIME=$GPU_TIME
+    EXTRA_SLURM_ARGS="--gres=gpu:1"
+else
+    PARTITION=$CPU_PARTITION
+    CPUS=$CPU_CPUS
+    MEM=$CPU_MEM
+    TIME=$CPU_TIME
+    EXTRA_SLURM_ARGS=""
+fi
+
+DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_DELTA_FLIP" "$WEIGHT_NOISE_STD" "${WRITE_PERTURBATION[@]}" <<'PY'
 import sys
 
 noise_std = float(sys.argv[1])
 p_flip = float(sys.argv[2])
-values = [float(x) for x in sys.argv[3:]]
+weight_noise_std = float(sys.argv[3])
+values = [float(x) for x in sys.argv[4:]]
 perturbation_str = "_".join(f"{v:.0e}" for v in values)
 suffix = perturbation_str
 if noise_std != 0.0:
     suffix += f"_noise{noise_std:.0e}"
 if p_flip != 0.0:
     suffix += f"_flip{p_flip:.0e}"
+if weight_noise_std != 0.0:
+    suffix += f"_wnoise{weight_noise_std:.0e}"
 print(suffix)
 PY
 )"
 
 echo "Submitting read_memory SLURM jobs..."
+echo "  partition=$PARTITION  cpus=$CPUS  mem=$MEM  time=$TIME  gpu=$([ "$USE_GPU" = true ] && echo yes || echo no)"
 echo "  cyclic_memory suffix: ${DIR_SUFFIX}"
 echo ""
 
@@ -140,6 +165,7 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
             --cpus-per-task="$CPUS" \
             --mem="$MEM" \
             --time="$TIME" \
+            $EXTRA_SLURM_ARGS \
             --output="$LOGS_DIR/${RUN_NAME}_%j.out" \
             --error="$LOGS_DIR/${RUN_NAME}_%j.err" \
             --wrap="cd '$SCRIPT_DIR' && poetry run python '$CODE_DIR/read_write.py' read \
@@ -151,13 +177,13 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
                 --dW $DW \
                 --label_noise_std $LABEL_NOISE_STD \
                 --p_delta_flip $P_DELTA_FLIP \
+                --weight_noise_std $WEIGHT_NOISE_STD \
                 --lr $LR \
                 --n_gd_steps $N_GD_STEPS \
                 --input_dim $INPUT_DIM \
                 --width $WIDTH \
                 --n_workers $CPUS \
                 --data_dir '$DATA_DIR'")
-
         echo "    Submitted job $JOB_ID → cycle $CYCLE_NUM  ($CKPT)"
     done
     echo ""

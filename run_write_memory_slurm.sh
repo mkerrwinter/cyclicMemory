@@ -78,6 +78,19 @@ DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 START_CYCLE=0
 LABEL_NOISE_STD=0.0
 P_DELTA_FLIP=0.0
+WEIGHT_NOISE_STD=0.0
+
+# SLURM resource settings
+# Set USE_GPU=true to submit to gpu_a100 (bills GPU SBUs); false for fat_rome (CPU SBUs).
+USE_GPU=false
+CPU_PARTITION=fat_rome
+GPU_PARTITION=gpu_a100
+CPU_CPUS=16
+GPU_CPUS=18        # one full GPU share on gpu_a100 (1 GPU + 18 CPU cores)
+CPU_MEM=8G
+GPU_MEM=32G
+CPU_TIME=24:00:00
+GPU_TIME=24:00:00
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -85,7 +98,22 @@ CODE_DIR="$SCRIPT_DIR/cyclicMemory"
 LOGS_DIR="$SCRIPT_DIR/slurm_logs"
 mkdir -p "$LOGS_DIR"
 
+if [ "$USE_GPU" = true ]; then
+    PARTITION=$GPU_PARTITION
+    CPUS=$GPU_CPUS
+    MEM=$GPU_MEM
+    TIME=$GPU_TIME
+    EXTRA_SLURM_ARGS="--gres=gpu:1"
+else
+    PARTITION=$CPU_PARTITION
+    CPUS=$CPU_CPUS
+    MEM=$CPU_MEM
+    TIME=$CPU_TIME
+    EXTRA_SLURM_ARGS=""
+fi
+
 echo "Submitting write_memory SLURM jobs..."
+echo "  partition=$PARTITION  cpus=$CPUS  mem=$MEM  time=$TIME  gpu=$([ "$USE_GPU" = true ] && echo yes || echo no)"
 echo ""
 
 for MODEL_DIR in "${MODEL_DIRS[@]}"; do
@@ -100,10 +128,11 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
 
     JOB_ID=$(sbatch --parsable \
         --job-name="$RUN_NAME" \
-        --partition=fat_rome \
-        --cpus-per-task=16 \
-        --mem=8G \
-        --time=24:00:00 \
+        --partition="$PARTITION" \
+        --cpus-per-task="$CPUS" \
+        --mem="$MEM" \
+        --time="$TIME" \
+        $EXTRA_SLURM_ARGS \
         --output="$LOGS_DIR/${RUN_NAME}_%j.out" \
         --error="$LOGS_DIR/${RUN_NAME}_%j.err" \
         --wrap="cd '$SCRIPT_DIR' && poetry run python '$CODE_DIR/read_write.py' write \
@@ -116,6 +145,7 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
             --start_cycle $START_CYCLE \
             --label_noise_std $LABEL_NOISE_STD \
             --p_delta_flip $P_DELTA_FLIP \
+            --weight_noise_std $WEIGHT_NOISE_STD \
             --save_freq $SAVE_FREQ \
             --input_dim $INPUT_DIM \
             --width $WIDTH \

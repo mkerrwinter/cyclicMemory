@@ -82,15 +82,15 @@ WEIGHT_NOISE_STD=0.0
 
 # SLURM resource settings
 # Set USE_GPU=true to submit to gpu_a100 (bills GPU SBUs); false for fat_rome (CPU SBUs).
-USE_GPU=true
+USE_GPU=false
 CPU_PARTITION=fat_rome
 GPU_PARTITION=gpu_a100
 CPU_CPUS=16       # fat_rome minimum allocation; all used as parallel probe workers
 GPU_CPUS=18       # one full GPU share on gpu_a100 (1 GPU + 18 CPU cores); used as workers
 CPU_MEM=2G
 GPU_MEM=2G
-CPU_TIME=12:00:00
-GPU_TIME=12:00:00
+CPU_TIME=6:00:00
+GPU_TIME=6:00:00
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

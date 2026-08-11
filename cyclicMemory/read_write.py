@@ -300,22 +300,35 @@ def write_memory(
 
 
 # ---------------------------------------------------------------------------
-# read_memory — worker (module-level so multiprocessing can pickle it)
+# read_memory — module-level state shared with worker pool
 # ---------------------------------------------------------------------------
+
+# Dataset tensors set once (by _pool_initializer or the serial path) so they
+# are never pickled per task, avoiding repeated serialisation of large arrays.
+_worker_X_all: "torch.Tensor | None" = None
+_worker_y_all: "torch.Tensor | None" = None
+
+
+def _pool_initializer(X_all: torch.Tensor, y_all: torch.Tensor) -> None:
+    """Initialise each pool worker with the shared dataset and pin to 1 thread."""
+    global _worker_X_all, _worker_y_all
+    torch.set_num_threads(1)
+    _worker_X_all = X_all
+    _worker_y_all = y_all
+
 
 def _probe_worker(args: tuple) -> tuple:
     """
     Run a single read probe for perturbation amplitude (k+1)*dW.
+
     Must be a module-level function so it is picklable by multiprocessing.
+    X_all and y_all are read from module-level globals set by _pool_initializer
+    (or manually for the serial path), so the dataset is never pickled per task.
 
-    Each worker sets torch.set_num_threads(1) to avoid over-subscription when
-    many workers run in parallel.
+    Returns (cycle_idx, k, p_size, n_changed, weight_deltas_list).
     """
-    (k, state_dict, original_weights,
-     dW, lr, n_gd_steps, input_dim, width, epsilon,
-     X_all, y_all) = args
-
-    torch.set_num_threads(1)   # one thread per worker; pool provides parallelism
+    (cycle_idx, k, state_dict, original_weights,
+     dW, lr, n_gd_steps, input_dim, width, epsilon) = args
 
     n_steps = k + 1
     p_size  = round((k + 1) * dW, 12)
@@ -327,11 +340,11 @@ def _probe_worker(args: tuple) -> tuple:
 
     for _ in range(n_steps):
         _perturb(probe_model, +dW)
-        _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+        _gd_step(probe_model, optimiser, loss_fn, _worker_X_all, _worker_y_all, n_gd_steps)
 
     for _ in range(n_steps):
         _perturb(probe_model, -dW)
-        _gd_step(probe_model, optimiser, loss_fn, X_all, y_all, n_gd_steps)
+        _gd_step(probe_model, optimiser, loss_fn, _worker_X_all, _worker_y_all, n_gd_steps)
 
     with torch.no_grad():
         probe_weights = torch.cat([p.detach().clone().flatten()
@@ -339,7 +352,7 @@ def _probe_worker(args: tuple) -> tuple:
         weight_deltas = probe_weights - original_weights
         n_changed = int((weight_deltas.abs() > epsilon).sum().item())
 
-    return (k, p_size, n_changed, weight_deltas.tolist())
+    return (cycle_idx, k, p_size, n_changed, weight_deltas.tolist())
 
 
 # ---------------------------------------------------------------------------
@@ -411,6 +424,7 @@ def read_memory(
     n_workers          : number of parallel worker processes (default: 1)
     """
     import glob as _glob
+    import csv as _csv
 
     device = torch.device("cpu")
 
@@ -439,36 +453,17 @@ def read_memory(
         ]
         print(f"Found {len(cycle_numbers)} checkpoint(s) in: {memory_dir}")
     else:
-        model_path = os.path.join(memory_dir, f"model_cycle{n_write_cycles:05d}.pt")
-        if not os.path.exists(model_path):
+        single_path = os.path.join(memory_dir, f"model_cycle{n_write_cycles:05d}.pt")
+        if not os.path.exists(single_path):
             raise FileNotFoundError(
-                f"No checkpoint found at '{model_path}'. "
+                f"No checkpoint found at '{single_path}'. "
                 f"Has write_memory been run for {n_write_cycles} cycle(s)?"
             )
         cycle_numbers = [n_write_cycles]
 
-    # ---- load training data once (shared across all checkpoints) ------------
-    print("Loading training data...")
-    X_all, y_all = _load_full_batch(data_dir, device)
-    print(f"  {X_all.shape[0]} samples, dim={X_all.shape[1]}")
-
-    loss_fn    = make_quadratic_hinge_loss()
-    n_steps_max = _n_steps_for(max_perturbation, dW)
-    actual_workers = min(n_workers, n_steps_max)
-
-    print(
-        f"\nProbing {n_steps_max} perturbation size(s): "
-        f"dW={dW} up to max={max_perturbation}  (epsilon={epsilon})\n"
-        f"Using {actual_workers} parallel worker(s).\n"
-    )
-
-    # ---- process each checkpoint --------------------------------------------
-    import csv as _csv
-
-    t_total_all = time.time()
-
-    for cycle_idx, cycle_num in enumerate(cycle_numbers):
-        model_path  = os.path.join(memory_dir, f"model_cycle{cycle_num:05d}.pt")
+    # ---- filter already-completed checkpoints --------------------------------
+    pending: list[tuple] = []   # (cycle_num, summary_csv, delta_csv)
+    for cycle_num in cycle_numbers:
         summary_csv = os.path.join(
             memory_dir,
             f"read_memory_cycles{cycle_num:05d}_eps{epsilon:.2e}.csv",
@@ -477,17 +472,48 @@ def read_memory(
             memory_dir,
             f"read_memory_cycles{cycle_num:05d}_deltas.csv",
         )
-
-        print(
-            f"[{cycle_idx + 1}/{len(cycle_numbers)}] "
-            f"cycle {cycle_num} — checkpoint: {os.path.basename(model_path)}"
-        )
-
         if os.path.exists(summary_csv) and os.path.exists(delta_csv):
-            print("  Output CSVs already exist, skipping.\n")
-            continue
+            print(f"  [cycle {cycle_num}] Output CSVs already exist, skipping.")
+        else:
+            pending.append((cycle_num, summary_csv, delta_csv))
 
-        # load this checkpoint
+    if not pending:
+        print("All checkpoints already processed.")
+        return
+
+    n_skipped = len(cycle_numbers) - len(pending)
+    print(
+        f"\n{len(pending)} checkpoint(s) to process"
+        + (f" ({n_skipped} already done)" if n_skipped else "")
+        + "."
+    )
+
+    # ---- load training data once (shared across all tasks via pool globals) -
+    print("Loading training data...")
+    X_all, y_all = _load_full_batch(data_dir, device)
+    print(f"  {X_all.shape[0]} samples, dim={X_all.shape[1]}")
+
+    n_steps_max    = _n_steps_for(max_perturbation, dW)
+    n_total_tasks  = len(pending) * n_steps_max
+    actual_workers = min(n_workers, n_total_tasks)
+
+    print(
+        f"\nProbing {n_steps_max} perturbation size(s): "
+        f"dW={dW} up to max={max_perturbation}  (epsilon={epsilon})\n"
+        f"Using {actual_workers} parallel worker(s).\n"
+    )
+
+    # ---- load all pending checkpoints and build the flat task list ----------
+    # Each task: (cycle_idx, k, state_dict, original_weights, dW, lr,
+    #             n_gd_steps, input_dim, width, epsilon)
+    # X_all/y_all are NOT in the task tuple — they live in module-level globals
+    # set by _pool_initializer (or manually below for the serial path), so the
+    # dataset is pickled once per worker rather than once per task.
+    cycle_meta: list[tuple] = []   # (cycle_num, summary_csv, delta_csv, original_weights)
+    flat_tasks: list[tuple] = []
+
+    for ci, (cycle_num, summary_csv, delta_csv) in enumerate(pending):
+        model_path = os.path.join(memory_dir, f"model_cycle{cycle_num:05d}.pt")
         original_model = FCNN(input_dim=input_dim, width=width).to(device)
         state = torch.load(model_path, map_location=device, weights_only=True)
         original_model.load_state_dict(state)
@@ -497,59 +523,96 @@ def read_memory(
             original_weights = torch.cat([p.detach().clone().flatten()
                                           for p in original_model.parameters()])
 
-        # build worker args and dispatch
-        worker_args = [
-            (k, original_model.state_dict(), original_weights,
-             dW, lr, n_gd_steps, input_dim, width, epsilon,
-             X_all, y_all)
-            for k in range(n_steps_max)
-        ]
+        cycle_meta.append((cycle_num, summary_csv, delta_csv, original_weights))
+        state_dict = original_model.state_dict()
 
-        t_cycle = time.time()
-
-        if actual_workers > 1:
-            with mp.Pool(processes=actual_workers) as pool:
-                raw_results = pool.map(_probe_worker, worker_args)
-        else:
-            torch.set_num_threads(1)
-            raw_results = [_probe_worker(a) for a in worker_args]
-
-        raw_results.sort(key=lambda r: r[0])
-
-        results = []
-        for k, p_size, n_changed, deltas in raw_results:
-            results.append((p_size, n_changed, deltas))
-            n_steps = k + 1
-            print(
-                f"  p={p_size:.4e}  (N={n_steps:>4} steps)  "
-                f"changed={n_changed}/{len(original_weights)}  "
-                f"({time.time() - t_cycle:.1f}s)"
+        for k in range(n_steps_max):
+            flat_tasks.append(
+                (ci, k, state_dict, original_weights,
+                 dW, lr, n_gd_steps, input_dim, width, epsilon)
             )
 
-        # save results
+    # Sort longest probes first (LPT scheduling): probe k takes O(k) work, so
+    # descending k starts the heaviest tasks immediately, maximising CPU
+    # utilisation and minimising idle time at the tail of the queue.
+    flat_tasks.sort(key=lambda t: t[1], reverse=True)
+
+    print(
+        f"Dispatching {n_total_tasks} probe tasks "
+        f"({n_steps_max} probes × {len(pending)} checkpoints) "
+        f"to {actual_workers} worker(s).\n"
+    )
+
+    # ---- helper: save one checkpoint's results once all probes are in -------
+    collected: dict[int, list] = {ci: [] for ci in range(len(pending))}
+    t_start = time.time()
+    progress_interval = max(1, n_total_tasks // 20)
+
+    def _save_checkpoint_results(ci: int) -> None:
+        cycle_num, summary_csv, delta_csv, original_weights = cycle_meta[ci]
+        results = sorted(collected[ci], key=lambda r: r[0])  # sort by k
         n_weights = len(original_weights)
+
         summary_header = ["perturbation_size", "n_changed_weights"]
-        delta_header   = ["perturbation_size"] + [f"delta_weight_{i}" for i in range(n_weights)]
+        delta_header   = (["perturbation_size"]
+                          + [f"delta_weight_{i}" for i in range(n_weights)])
 
         with open(summary_csv, "w", newline="") as f:
             writer = _csv.writer(f)
             writer.writerow(summary_header)
-            for p_size, n_changed, _deltas in results:
+            for _k, p_size, n_changed, _deltas in results:
                 writer.writerow([p_size, n_changed])
 
         with open(delta_csv, "w", newline="") as f:
             writer = _csv.writer(f)
             writer.writerow(delta_header)
-            for p_size, _n_changed, deltas in results:
+            for _k, p_size, _n_changed, deltas in results:
                 writer.writerow([p_size] + deltas)
 
-        print(f"  Saved → {summary_csv}")
-        print(f"  Saved → {delta_csv}\n")
+        print(
+            f"  [cycle {cycle_num}] Done — saved results "
+            f"({time.time() - t_start:.1f}s elapsed)"
+        )
+
+    # ---- dispatch via single persistent pool --------------------------------
+    n_done = 0
+
+    if actual_workers > 1:
+        # X_all/y_all sent to each worker once via the initializer, not per task.
+        with mp.Pool(
+            processes=actual_workers,
+            initializer=_pool_initializer,
+            initargs=(X_all, y_all),
+        ) as pool:
+            for result in pool.imap_unordered(_probe_worker, flat_tasks, chunksize=1):
+                ci, k, p_size, n_changed, deltas = result
+                collected[ci].append((k, p_size, n_changed, deltas))
+                n_done += 1
+                if len(collected[ci]) == n_steps_max:
+                    _save_checkpoint_results(ci)
+                if n_done % progress_interval == 0:
+                    print(
+                        f"  Progress: {n_done}/{n_total_tasks} tasks "
+                        f"({n_done * 100 // n_total_tasks}%,  "
+                        f"{time.time() - t_start:.1f}s elapsed)"
+                    )
+    else:
+        # Serial path: set module-level globals manually (no pool).
+        global _worker_X_all, _worker_y_all
+        _worker_X_all = X_all
+        _worker_y_all = y_all
+        torch.set_num_threads(1)
+        for task_args in flat_tasks:
+            ci, k, p_size, n_changed, deltas = _probe_worker(task_args)
+            collected[ci].append((k, p_size, n_changed, deltas))
+            n_done += 1
+            if len(collected[ci]) == n_steps_max:
+                _save_checkpoint_results(ci)
 
     print(
-        f"Read-memory complete. "
-        f"Processed {len(cycle_numbers)} checkpoint(s) in "
-        f"{time.time() - t_total_all:.1f}s total."
+        f"\nRead-memory complete. "
+        f"Processed {len(pending)} checkpoint(s) in "
+        f"{time.time() - t_start:.1f}s total."
     )
 
 

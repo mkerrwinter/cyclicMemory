@@ -89,8 +89,8 @@ CPU_CPUS=16       # fat_rome minimum allocation; all used as parallel probe work
 GPU_CPUS=18       # one full GPU share on gpu_a100 (1 GPU + 18 CPU cores); used as workers
 CPU_MEM=2G
 GPU_MEM=2G
-CPU_TIME=6:00:00
-GPU_TIME=6:00:00
+CPU_TIME=12:00:00
+GPU_TIME=12:00:00
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

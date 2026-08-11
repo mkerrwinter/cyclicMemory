@@ -756,11 +756,12 @@ if __name__ == "__main__":
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
     # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
-    perturbation_string = "1e-03"
+    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04_5e-04"
+    # perturbation_string = "1e-03"
     eps = 5e-7
     label_noise_std = 0.0
     p_delta_flip = 0.0
-    weight_noise_std = 1e-4
+    weight_noise_std = 0.0
     legend_only = False
     noise_suffix = ""
     if label_noise_std != 0.0:
@@ -776,8 +777,8 @@ if __name__ == "__main__":
 
     plot_average_changed_weights_vs_perturbation(
         run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
-        repeats=[0, 2, 3, 4, 5, 6, 7, 8],
-        # repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
+        # repeats=[0, 2, 3, 4, 5, 6, 7, 8],
+        repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
         perturbation_str=perturbation_string,
         out_path=outpath,
         epsilon=eps,

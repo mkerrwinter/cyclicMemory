@@ -76,6 +76,7 @@ def _gd_step(
     label_noise_std: float = 0.0,
     p_delta_flip: float = 0.0,
     weight_noise_std: float = 0.0,
+    spring_noise_std: float = 0.0,
 ) -> float:
     """Run `n_steps` of full-batch GD; return final loss.
 
@@ -90,6 +91,12 @@ def _gd_step(
     std=weight_noise_std) is sampled once per call and added to every weight
     parameter before the n_steps inner iterations begin — i.e. the noise
     changes once per dW step.
+
+    If spring_noise_std > 0, a single Gaussian tensor m (mean=0,
+    std=spring_noise_std) is sampled once per call, one element per training
+    example. The hinge floor is replaced by sqrt(m*(f-y)) (clamped to 0 when
+    m*(f-y) < 0), so the loss becomes 0.5*mean(max(Delta, sqrt(m*(f-y)))^2).
+    The same m is held fixed for all n_steps GD iterations.
     """
     y_train = y
     if label_noise_std > 0.0:
@@ -98,7 +105,8 @@ def _gd_step(
         with torch.no_grad():
             for param in model.parameters():
                 param.add_(torch.randn_like(param) * weight_noise_std)
-    train_loss_fn = make_quadratic_hinge_loss(p_delta_flip=p_delta_flip)
+    spring_m = torch.randn_like(y) * spring_noise_std if spring_noise_std > 0.0 else None
+    train_loss_fn = make_quadratic_hinge_loss(p_delta_flip=p_delta_flip, spring_m=spring_m)
     for _ in range(n_steps):
         model.train()
         optimiser.zero_grad()
@@ -145,6 +153,7 @@ def write_memory(
     label_noise_std:  float  = 0.0,
     p_delta_flip:     float  = 0.0,
     weight_noise_std: float  = 0.0,
+    spring_noise_std: float  = 0.0,
     input_dim:        int    = 10,
     width:            int    = 10,
     data_dir:         str    = DATA_DIR,
@@ -182,6 +191,11 @@ def write_memory(
                    parameters before each GD call (default: 0.0 = no noise). A
                    fresh noise tensor is sampled once per dW step (i.e. per call
                    to _gd_step), so the noise changes each perturbation step.
+    spring_noise_std : standard deviation of Gaussian spring noise m added to
+                   the hinge floor during each GD call (default: 0.0 = no
+                   spring noise). A fresh m tensor is sampled once per dW step;
+                   the loss becomes 0.5*mean(max(Delta, sqrt(m*(f-y)))^2) with
+                   the floor clamped to 0 when m*(f-y) < 0.
     input_dim    : input dimension of the network
     width        : hidden layer width of the network
     data_dir     : directory containing train_dataset.pt
@@ -199,6 +213,8 @@ def write_memory(
         dir_suffix += f"_flip{p_delta_flip:.0e}"
     if weight_noise_std != 0.0:
         dir_suffix += f"_wnoise{weight_noise_std:.0e}"
+    if spring_noise_std != 0.0:
+        dir_suffix += f"_spring{spring_noise_std:.0e}"
     output_dir = os.path.join(model_dir, f"cyclic_memory_{dir_suffix}")
     os.makedirs(output_dir, exist_ok=True)
     print(f"Checkpoints will be saved to: {output_dir}")
@@ -267,12 +283,12 @@ def write_memory(
             # --- upward sweep (+dW × n_w_steps) ---
             for step in range(n_w_steps):
                 _perturb(model, +dW)
-                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std, p_delta_flip, weight_noise_std)
+                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std, p_delta_flip, weight_noise_std, spring_noise_std)
 
             # --- downward sweep (-dW × n_w_steps) ---
             for step in range(n_w_steps):
                 _perturb(model, -dW)
-                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std, p_delta_flip, weight_noise_std)
+                _gd_step(model, optimiser, loss_fn, X_all, y_all, n_gd_steps, label_noise_std, p_delta_flip, weight_noise_std, spring_noise_std)
 
         # ---- end-of-cycle bookkeeping ---------------------------------------
         model.eval()
@@ -371,6 +387,7 @@ def read_memory(
     label_noise_std:    float  = 0.0,
     p_delta_flip:       float  = 0.0,
     weight_noise_std:   float  = 0.0,
+    spring_noise_std:   float  = 0.0,
     input_dim:          int    = 10,
     width:              int    = 10,
     data_dir:           str    = DATA_DIR,
@@ -418,6 +435,8 @@ def read_memory(
                          resolve the correct cyclic_memory directory (default: 0.0)
     weight_noise_std   : weight noise std used during writing — used to resolve the
                          correct cyclic_memory directory (default: 0.0)
+    spring_noise_std   : spring noise std used during writing — used to resolve the
+                         correct cyclic_memory directory (default: 0.0)
     input_dim          : input dimension of the network
     width              : hidden layer width of the network
     data_dir           : directory containing train_dataset.pt
@@ -437,6 +456,8 @@ def read_memory(
         dir_suffix += f"_flip{p_delta_flip:.0e}"
     if weight_noise_std != 0.0:
         dir_suffix += f"_wnoise{weight_noise_std:.0e}"
+    if spring_noise_std != 0.0:
+        dir_suffix += f"_spring{spring_noise_std:.0e}"
     memory_dir = os.path.join(model_dir, f"cyclic_memory_{dir_suffix}")
 
     # ---- determine which cycle numbers to process ---------------------------
@@ -678,6 +699,13 @@ if __name__ == "__main__":
                              "parameters before each GD call (default: 0.0 = no noise). A "
                              "fresh noise tensor is sampled once per dW step."
                          ))
+    p_write.add_argument("--spring_noise_std", type=float, default=0.0,
+                         help=(
+                             "Standard deviation of Gaussian spring noise m added to the "
+                             "hinge floor during each GD call (default: 0.0 = no spring "
+                             "noise). A fresh m tensor is sampled once per dW step; the "
+                             "loss becomes 0.5*mean(max(Delta, sqrt(m*(f-y)))^2)."
+                         ))
 
     # ---- read subcommand ----------------------------------------------------
     p_read = subparsers.add_parser("read", help="Read a memory by probing weight sensitivity")
@@ -732,6 +760,11 @@ if __name__ == "__main__":
                             "Weight noise std used during writing — used to resolve the "
                             "correct cyclic_memory directory (default: 0.0)."
                         ))
+    p_read.add_argument("--spring_noise_std", type=float, default=0.0,
+                        help=(
+                            "Spring noise std used during writing — used to resolve the "
+                            "correct cyclic_memory directory (default: 0.0)."
+                        ))
 
     args = parser.parse_args()
 
@@ -748,6 +781,7 @@ if __name__ == "__main__":
             label_noise_std  = args.label_noise_std,
             p_delta_flip     = args.p_delta_flip,
             weight_noise_std = args.weight_noise_std,
+            spring_noise_std = args.spring_noise_std,
             input_dim    = args.input_dim,
             width        = args.width,
             data_dir     = args.data_dir,
@@ -765,6 +799,7 @@ if __name__ == "__main__":
             label_noise_std    = args.label_noise_std,
             p_delta_flip       = args.p_delta_flip,
             weight_noise_std   = args.weight_noise_std,
+            spring_noise_std   = args.spring_noise_std,
             input_dim          = args.input_dim,
             width              = args.width,
             data_dir           = args.data_dir,

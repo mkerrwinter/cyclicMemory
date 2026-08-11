@@ -49,19 +49,23 @@ def load_datasets(data_dir: str = DATA_DIR):
     return train_ds, test_ds
 
 
-def make_quadratic_hinge_loss(p_delta_flip: float = 0.0):
+def make_quadratic_hinge_loss(p_delta_flip: float = 0.0, spring_m: "torch.Tensor | None" = None):
     def quadratic_hinge(output, target):
         Delta = 1.0 - target * output
         if p_delta_flip > 0.0:
             flip_mask = torch.bernoulli(torch.full_like(Delta, p_delta_flip)).bool()
             Delta = torch.where(flip_mask, -Delta, Delta)
-        zeros = torch.zeros_like(Delta)
 
-        max_Delta = torch.max(zeros, Delta)
+        if spring_m is not None:
+            # Spring floor: sqrt(m*(f-y)), clamped to 0 when m*(f-y) < 0.
+            # A fresh m is sampled once per dW step (outside this function) and
+            # captured in the closure, so the floor is fixed across GD steps.
+            spring_floor = torch.sqrt(torch.clamp(spring_m * (output - target), min=0.0))
+            max_Delta = torch.max(spring_floor, Delta)
+        else:
+            max_Delta = torch.max(torch.zeros_like(Delta), Delta)
 
-        sq_max_Delta = max_Delta * max_Delta
-
-        return 0.5 * torch.mean(sq_max_Delta)
+        return 0.5 * torch.mean(max_Delta * max_Delta)
 
     return quadratic_hinge
 

@@ -231,6 +231,7 @@ def plot_average_changed_weights_vs_perturbation(
     label_noise_std: float = 0.0,
     p_delta_flip: float = 0.0,
     weight_noise_std: float = 0.0,
+    spring_noise_std: float = 0.0,
     legend_only: bool = False,
 ) -> None:
     """
@@ -257,6 +258,9 @@ def plot_average_changed_weights_vs_perturbation(
     weight_noise_std: if > 0, also appends _wnoise<weight_noise_std:.0e> to the
                       directory suffix. Must match the value used when
                       write_memory was called.
+    spring_noise_std: if > 0, also appends _spring<spring_noise_std:.0e> to the
+                      directory suffix. Must match the value used when
+                      write_memory was called.
     legend_only     : if True, plot only the 5 write-cycle counts that appear in
                       the legend (evenly spaced across the full range), rather
                       than all available cycle counts.
@@ -268,6 +272,8 @@ def plot_average_changed_weights_vs_perturbation(
         dir_suffix += f"_flip{p_delta_flip:.0e}"
     if weight_noise_std != 0.0:
         dir_suffix += f"_wnoise{weight_noise_std:.0e}"
+    if spring_noise_std != 0.0:
+        dir_suffix += f"_spring{spring_noise_std:.0e}"
 
     # Collect n_changed arrays per repeat, keyed by n_cycles
     # Structure: {n_cycles: [ [n_changed_per_perturbation_step], ... ]}
@@ -692,6 +698,14 @@ def main() -> None:
              "(used by: average_changed_weights_vs_perturbation, default: 0.0)",
     )
     parser.add_argument(
+        "--spring_noise_std",
+        type=float,
+        default=0.0,
+        help="Spring noise std used during write_memory. When > 0, appends "
+             "_spring<spring_noise_std:.0e> to the cyclic_memory directory suffix. "
+             "(used by: average_changed_weights_vs_perturbation, default: 0.0)",
+    )
+    parser.add_argument(
         "--legend_only",
         action="store_true",
         default=False,
@@ -733,6 +747,7 @@ def main() -> None:
             label_noise_std=args.label_noise_std,
             p_delta_flip=args.p_delta_flip,
             weight_noise_std=args.weight_noise_std,
+            spring_noise_std=args.spring_noise_std,
             legend_only=args.legend_only,
         )
     elif args.plot == "test_loss_vs_write_cycles":
@@ -762,6 +777,7 @@ if __name__ == "__main__":
     label_noise_std = 0.0
     p_delta_flip = 0.0
     weight_noise_std = 0.0
+    spring_noise_std = 0.0
     legend_only = False
     noise_suffix = ""
     if label_noise_std != 0.0:
@@ -770,6 +786,8 @@ if __name__ == "__main__":
         noise_suffix += f"_flip{p_delta_flip}"
     if weight_noise_std != 0.0:
         noise_suffix += f"_wnoise{weight_noise_std}"
+    if spring_noise_std != 0.0:
+        noise_suffix += f"_spring{spring_noise_std}"
     if legend_only:
         outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}{}_eps{}_5lines.pdf'.format(perturbation_string, noise_suffix, eps))
     else:
@@ -785,6 +803,7 @@ if __name__ == "__main__":
         label_noise_std=label_noise_std,
         p_delta_flip=p_delta_flip,
         weight_noise_std=weight_noise_std,
+        spring_noise_std=spring_noise_std,
         legend_only=legend_only
     )
 

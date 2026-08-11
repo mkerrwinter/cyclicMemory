@@ -79,6 +79,7 @@ DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=0.0
 P_DELTA_FLIP=0.0
 WEIGHT_NOISE_STD=1e-6
+SPRING_NOISE_STD=0.0
 
 # SLURM resource settings
 # Set USE_GPU=true to submit to gpu_a100 (bills GPU SBUs); false for fat_rome (CPU SBUs).
@@ -112,13 +113,14 @@ else
     EXTRA_SLURM_ARGS=""
 fi
 
-DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_DELTA_FLIP" "$WEIGHT_NOISE_STD" "${WRITE_PERTURBATION[@]}" <<'PY'
+DIR_SUFFIX="$(python - "$LABEL_NOISE_STD" "$P_DELTA_FLIP" "$WEIGHT_NOISE_STD" "$SPRING_NOISE_STD" "${WRITE_PERTURBATION[@]}" <<'PY'
 import sys
 
 noise_std = float(sys.argv[1])
 p_flip = float(sys.argv[2])
 weight_noise_std = float(sys.argv[3])
-values = [float(x) for x in sys.argv[4:]]
+spring_noise_std = float(sys.argv[4])
+values = [float(x) for x in sys.argv[5:]]
 perturbation_str = "_".join(f"{v:.0e}" for v in values)
 suffix = perturbation_str
 if noise_std != 0.0:
@@ -127,6 +129,8 @@ if p_flip != 0.0:
     suffix += f"_flip{p_flip:.0e}"
 if weight_noise_std != 0.0:
     suffix += f"_wnoise{weight_noise_std:.0e}"
+if spring_noise_std != 0.0:
+    suffix += f"_spring{spring_noise_std:.0e}"
 print(suffix)
 PY
 )"
@@ -170,6 +174,7 @@ for MODEL_DIR in "${MODEL_DIRS[@]}"; do
             --label_noise_std $LABEL_NOISE_STD \
             --p_delta_flip $P_DELTA_FLIP \
             --weight_noise_std $WEIGHT_NOISE_STD \
+            --spring_noise_std $SPRING_NOISE_STD \
             --lr $LR \
             --n_gd_steps $N_GD_STEPS \
             --input_dim $INPUT_DIM \

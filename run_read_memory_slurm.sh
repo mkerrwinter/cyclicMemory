@@ -78,7 +78,7 @@ WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=0.0
 P_DELTA_FLIP=0.0
-WEIGHT_NOISE_STD=1e-6
+WEIGHT_NOISE_STD=1e-5
 SPRING_NOISE_STD=0.0
 
 # SLURM resource settings

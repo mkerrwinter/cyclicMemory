@@ -60,7 +60,7 @@ def make_quadratic_hinge_loss(p_delta_flip: float = 0.0, spring_m: "torch.Tensor
             # Spring floor: sqrt(m*(f-y)), clamped to 0 when m*(f-y) < 0.
             # A fresh m is sampled once per dW step (outside this function) and
             # captured in the closure, so the floor is fixed across GD steps.
-            spring_floor = torch.sqrt(torch.clamp(spring_m * (output - target), min=0.0))
+            spring_floor = torch.sqrt(torch.clamp(spring_m * (output - target), min=1e-30))
             max_Delta = torch.max(spring_floor, Delta)
         else:
             max_Delta = torch.max(torch.zeros_like(Delta), Delta)

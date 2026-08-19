@@ -773,11 +773,11 @@ if __name__ == "__main__":
     # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
     # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04_5e-04"
     perturbation_string = "1e-03"
-    eps = 5e-5
+    eps = 5e-6
     label_noise_std = 0.0
     p_delta_flip = 0.0
     weight_noise_std = 0.0
-    spring_noise_std = 1e-6
+    spring_noise_std = 0.0
     legend_only = False
     noise_suffix = ""
     if label_noise_std != 0.0:

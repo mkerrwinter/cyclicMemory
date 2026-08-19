@@ -9,68 +9,68 @@
 
 # ---- Edit these -----------------------------------------------------------
 # List the model directories to read (mirrors MODEL_DIRS in run_write_memory_slurm.sh)
-#MODEL_DIRS=(
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0"
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r2"
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r3"
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r4"
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r5"
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r6"
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r7"
-#    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r8"
-#)
-
 MODEL_DIRS=(
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r2"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r3"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r4"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r5"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r6"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r7"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r8"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r10"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r11"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r12"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r15"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r16"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r17"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r18"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r19"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r20"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r21"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r22"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r24"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r25"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r27"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r28"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r29"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r30"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r31"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r32"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r33"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r34"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r35"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r36"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r38"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r40"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r41"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r42"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r43"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r44"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r45"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r46"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r47"
-  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r49"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r2"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r3"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r4"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r5"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r6"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r7"
+    "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r8"
 )
+
+#MODEL_DIRS=(
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r0"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r2"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r3"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r4"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r5"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r6"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r7"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r8"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r10"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r11"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r12"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r15"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r16"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r17"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r18"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r19"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r20"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r21"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r22"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r24"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r25"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r27"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r28"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r29"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r30"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r31"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r32"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r33"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r34"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r35"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r36"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r38"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r40"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r41"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r42"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r43"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r44"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r45"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r46"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r47"
+#  "/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r49"
+#)
 
 # Read parameters (defaults from read_write.py unless you want to override)
 MAX_PERTURBATION=1.5e-3   # largest perturbation amplitude to probe
 #WRITE_PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4 5e-4)    # perturbation amplitude(s), space-separated for multiple
 WRITE_PERTURBATION=(1e-3)    # perturbation amplitude(s), space-separated for multiple
 EPSILON=1e-5            # weight-change threshold to count a weight as "changed"
-#DW=5e-5
-DW=2.5e-5
+DW=5e-5
+#DW=2.5e-5
 LR=0.1
 N_GD_STEPS=2000
 INPUT_DIM=10
@@ -79,7 +79,7 @@ DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
 LABEL_NOISE_STD=0.0
 P_DELTA_FLIP=0.0
 WEIGHT_NOISE_STD=0.0
-SPRING_NOISE_STD=0.0
+SPRING_NOISE_STD=1e-8
 
 # SLURM resource settings
 # Set USE_GPU=true to submit to gpu_a100 (bills GPU SBUs); false for fat_rome (CPU SBUs).

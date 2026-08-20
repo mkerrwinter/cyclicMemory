@@ -777,7 +777,7 @@ if __name__ == "__main__":
     label_noise_std = 0.0
     p_delta_flip = 0.0
     weight_noise_std = 0.0
-    spring_noise_std = 0.0
+    spring_noise_std = 1e-7
     legend_only = False
     noise_suffix = ""
     if label_noise_std != 0.0:

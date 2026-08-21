@@ -23,7 +23,7 @@ import torch
 
 from random_dataset import RandomVectorDataset          # noqa: F401 — required for torch.load unpickling
 from reduced_MNIST_dataset import ReducedMNISTDataset   # noqa: F401 — required for torch.load unpickling
-from paths import RESULTS_DIR, LOCAL_RESULTS_DIR
+from paths import RESULTS_DIR, LOCAL_RESULTS_DIR, LOCAL_DATA_DIR
 
 
 # ---------------------------------------------------------------------------
@@ -492,17 +492,22 @@ def plot_test_loss_vs_write_cycles(
 # Plot: test loss vs write cycles (averaged over repeats)
 # ---------------------------------------------------------------------------
 
-def plot_average_test_loss_vs_write_cycles(
+def plot_initial_vs_final_test_loss_boxplot(
     run_base: str,
     repeats: list[int],
     perturbation_str: str,
     data_dir: str = None,
     out_path: str = None,
+    jitter: float = 0.06,
+    seed: int = 0,
+    spring_noise_std: float = 0.0,
 ) -> None:
     """
-    Average test loss over multiple repeat runs and plot mean vs write-cycle
-    count, with individual repeat curves shown in the background at low alpha.
-    Individual plots are also saved to each repeat's plots/ directory.
+    For each repeat run, load the initial (first write cycle, typically 0)
+    and final (last write cycle) test loss, then plot a box-and-whisker
+    summary with two boxes — "Initial" and "Final" — across all repeats.
+    The individual per-repeat values are overlaid as a jittered scatter on
+    top of each box.
 
     Parameters
     ----------
@@ -511,89 +516,79 @@ def plot_average_test_loss_vs_write_cycles(
     repeats          : list of repeat indices, e.g. [0, 2, 3, 4]
     perturbation_str : cyclic_memory subdirectory suffix, e.g. '1e-03'
     data_dir         : path to train/test datasets (defaults to <repo>/data)
-    out_path         : optional explicit output path for the averaged plot;
-                       defaults to <snellius_results>/aggregate_plots/
+    out_path         : optional explicit output path; defaults to
+                       <snellius_results>/aggregate_plots/
+    jitter           : half-width of the uniform x-jitter applied to the
+                       scatter points (in axis units, default 0.06)
+    seed             : RNG seed for the jitter, for reproducibility
+    spring_noise_std : spring noise std used during write_memory. When > 0,
+                       appends _spring<spring_noise_std:.0e> to the
+                       cyclic_memory directory suffix and the output
+                       filename. Must match the value used when
+                       write_memory was called.
     """
     if data_dir is None:
         from paths import DATA_DIR
         data_dir = DATA_DIR
 
-    # {n_cycles: [loss_repeat0, loss_repeat1, ...]}
-    all_losses: dict[int, list[float]] = defaultdict(list)
-    # {r: {n_cycles: loss}} for individual plots
-    per_repeat_losses: dict[int, dict[int, float]] = {}
+    dir_suffix = perturbation_str
+    if spring_noise_std != 0.0:
+        dir_suffix += f"_spring{spring_noise_std:.0e}"
+
+    initial_losses: list[float] = []
+    final_losses: list[float] = []
 
     for r in repeats:
-        cyclic_dir = os.path.abspath(f"{run_base}_r{r}/cyclic_memory_{perturbation_str}")
+        cyclic_dir = os.path.abspath(f"{run_base}_r{r}/cyclic_memory_{dir_suffix}")
         if not os.path.isdir(cyclic_dir):
             print(f"  WARNING: directory not found, skipping: {cyclic_dir}")
             continue
         print(f"  Loading checkpoints from: {cyclic_dir}")
         losses = _load_test_losses(cyclic_dir, data_dir)
-        per_repeat_losses[r] = losses
-        for n_cycles, loss in losses.items():
-            all_losses[n_cycles].append(loss)
+        if not losses:
+            continue
+        cycles = sorted(losses.keys())
+        initial_losses.append(losses[cycles[0]])
+        final_losses.append(losses[cycles[-1]])
 
-    if not all_losses:
+    if not initial_losses:
         print("No data found across any repeat.")
         return
 
-    cycles = sorted(all_losses.keys())
-    means  = np.array([np.mean(all_losses[c]) for c in cycles])
+    rng = np.random.default_rng(seed)
+    fig, ax = plt.subplots(figsize=(5, 5))
 
-    fig, ax = plt.subplots(figsize=(7, 5))
+    data = [initial_losses, final_losses]
+    positions = [1, 2]
+    ax.boxplot(data, positions=positions, widths=0.5, showfliers=False,
+               patch_artist=True,
+               boxprops=dict(facecolor="lightgray", edgecolor="black"),
+               medianprops=dict(color="black"))
 
-    # Individual repeat curves in the background
-    for r, losses in per_repeat_losses.items():
-        r_cycles = sorted(losses.keys())
-        r_vals   = [losses[c] for c in r_cycles]
-        ax.plot(r_cycles, r_vals, color="steelblue", linewidth=0.8,
-                alpha=0.25, marker="o", markersize=2)
+    # Jittered scatter of individual repeat values on top of each box
+    for pos, vals in zip(positions, data):
+        x = pos + rng.uniform(-jitter, jitter, size=len(vals))
+        ax.scatter(x, vals, color="steelblue", edgecolor="black",
+                   linewidth=0.3, s=25, zorder=5, alpha=0.8)
 
-    # Mean on top
-    ax.plot(cycles, means, marker="o", markersize=4, linewidth=1.5, color="steelblue",
-            label=f"mean (n={len(per_repeat_losses)} repeats)")
-
-    ax.set_xlabel("Write cycles")
+    ax.set_xticks(positions)
+    ax.set_xticklabels(["Initial", "Final"])
+    ax.set_xlim(0.5, 2.5)
     ax.set_ylabel("Test loss")
     ax.set_yscale("log")
-    ax.legend(fontsize=8, loc="best")
     fig.tight_layout()
 
     if out_path is None:
         aggregate_dir = os.path.join(os.path.dirname(os.path.abspath(run_base)), "aggregate_plots")
         out_path = os.path.join(
             aggregate_dir,
-            f"average_test_loss_vs_write_cycles_{perturbation_str}.pdf",
+            f"initial_vs_final_test_loss_boxplot_{dir_suffix}.pdf",
         )
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     fig.savefig(out_path)
     plt.close(fig)
     print(f"Saved → {out_path}")
 
-    # Save individual test loss plots for each repeat
-    for r, losses in per_repeat_losses.items():
-        if not losses:
-            continue
-        r_cycles = sorted(losses.keys())
-        r_vals   = [losses[c] for c in r_cycles]
-
-        fig_r, ax_r = plt.subplots(figsize=(7, 5))
-        ax_r.plot(r_cycles, r_vals, marker="o", markersize=4, linewidth=1.5, color="steelblue")
-        ax_r.set_xlabel("Write cycles")
-        ax_r.set_ylabel("Test loss")
-        ax_r.set_yscale("log")
-        fig_r.tight_layout()
-
-        plots_dir = os.path.join(os.path.abspath(f"{run_base}_r{r}"), "plots")
-        os.makedirs(plots_dir, exist_ok=True)
-        repeat_out = os.path.join(
-            plots_dir,
-            f"test_loss_vs_write_cycles_{perturbation_str}.pdf",
-        )
-        fig_r.savefig(repeat_out)
-        plt.close(fig_r)
-        print(f"Saved → {repeat_out}")
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +600,7 @@ PLOTS = {
     "changed_weights_vs_perturbation":          plot_changed_weights_vs_perturbation,
     "average_changed_weights_vs_perturbation":  plot_average_changed_weights_vs_perturbation,
     "test_loss_vs_write_cycles":                plot_test_loss_vs_write_cycles,
-    "average_test_loss_vs_write_cycles":        plot_average_test_loss_vs_write_cycles,
+    "initial_vs_final_test_loss_boxplot":       plot_initial_vs_final_test_loss_boxplot,
 }
 
 
@@ -752,14 +747,15 @@ def main() -> None:
         )
     elif args.plot == "test_loss_vs_write_cycles":
         plot_test_loss_vs_write_cycles(args.cyclic_dir, out_path=out)
-    elif args.plot == "average_test_loss_vs_write_cycles":
+    elif args.plot == "initial_vs_final_test_loss_boxplot":
         if not args.run_base or not args.repeats or not args.perturbation_str:
             parser.error(
                 "--run_base, --repeats, and --perturbation_str are required "
-                "for average_test_loss_vs_write_cycles"
+                "for initial_vs_final_test_loss_boxplot"
             )
-        plot_average_test_loss_vs_write_cycles(
-            args.run_base, args.repeats, args.perturbation_str, out_path=out
+        plot_initial_vs_final_test_loss_boxplot(
+            args.run_base, args.repeats, args.perturbation_str, out_path=out,
+            spring_noise_std=args.spring_noise_std,
         )
     else:
         plot_fn = PLOTS[args.plot]
@@ -793,28 +789,30 @@ if __name__ == "__main__":
     else:
         outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}{}_eps{}.pdf'.format(perturbation_string, noise_suffix, eps))
 
-    plot_average_changed_weights_vs_perturbation(
-        run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
-        repeats=[0, 2, 3, 4, 5, 6, 7, 8],
-        # repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
-        perturbation_str=perturbation_string,
-        out_path=outpath,
-        epsilon=eps,
-        label_noise_std=label_noise_std,
-        p_delta_flip=p_delta_flip,
-        weight_noise_std=weight_noise_std,
-        spring_noise_std=spring_noise_std,
-        legend_only=legend_only
-    )
+    # plot_average_changed_weights_vs_perturbation(
+    #     run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
+    #     repeats=[0, 2, 3, 4, 5, 6, 7, 8],
+    #     # repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
+    #     perturbation_str=perturbation_string,
+    #     out_path=outpath,
+    #     epsilon=eps,
+    #     label_noise_std=label_noise_std,
+    #     p_delta_flip=p_delta_flip,
+    #     weight_noise_std=weight_noise_std,
+    #     spring_noise_std=spring_noise_std,
+    #     legend_only=legend_only
+    # )
 
     # Single run (r0)
     # plot_test_loss_vs_write_cycles(
     #     cyclic_dir=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03")
     # )
 
-    # # Averaged over repeats
-    # plot_average_test_loss_vs_write_cycles(
-    #     run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
-    #     repeats=[2, 3, 4, 5, 6, 8],
-    #     perturbation_str="1e-03",
-    # )
+    # Averaged over repeats
+    plot_initial_vs_final_test_loss_boxplot(
+        run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
+        data_dir=LOCAL_DATA_DIR,
+        repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
+        perturbation_str="1e-03",
+        spring_noise_std=spring_noise_std,
+    )

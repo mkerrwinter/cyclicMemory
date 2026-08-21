@@ -64,8 +64,8 @@ MODEL_DIRS=(
 
 # Write parameters (defaults from read_write.py)
 #PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4)
-#PERTURBATION=(1e-3)
-PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4 5e-4)   # For high-res
+PERTURBATION=(1e-3)
+#PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4 5e-4)   # For high-res
 #DW=5e-5
 DW=2.5e-5 # For high-res
 LR=0.1

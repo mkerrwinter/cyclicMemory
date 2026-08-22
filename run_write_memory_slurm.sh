@@ -64,8 +64,8 @@ MODEL_DIRS=(
 
 # Write parameters (defaults from read_write.py)
 #PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4)
-PERTURBATION=(1e-3)
-#PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4 5e-4)   # For high-res
+#PERTURBATION=(1e-3)
+PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4 5e-4)   # For high-res
 #DW=5e-5
 DW=2.5e-5 # For high-res
 LR=0.1
@@ -76,7 +76,7 @@ SAVE_FREQ=10
 INPUT_DIM=10
 WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
-START_CYCLE=0
+START_CYCLE=70
 LABEL_NOISE_STD=0.0
 P_DELTA_FLIP=0.0
 WEIGHT_NOISE_STD=0.0

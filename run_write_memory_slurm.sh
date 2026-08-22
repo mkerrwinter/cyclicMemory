@@ -91,7 +91,7 @@ CPU_CPUS=16
 GPU_CPUS=18        # one full GPU share on gpu_a100 (1 GPU + 18 CPU cores)
 CPU_MEM=2G
 GPU_MEM=2G
-CPU_TIME=24:00:00
+CPU_TIME=36:00:00
 GPU_TIME=24:00:00
 # ---------------------------------------------------------------------------
 

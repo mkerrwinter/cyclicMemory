@@ -66,8 +66,8 @@ MODEL_DIRS=(
 
 # Read parameters (defaults from read_write.py unless you want to override)
 MAX_PERTURBATION=1.5e-3   # largest perturbation amplitude to probe
-#WRITE_PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4 5e-4)    # perturbation amplitude(s), space-separated for multiple
-WRITE_PERTURBATION=(1e-3)    # perturbation amplitude(s), space-separated for multiple
+WRITE_PERTURBATION=(1e-3 5e-4 5e-4 5e-4 5e-4 5e-4 5e-4)    # perturbation amplitude(s), space-separated for multiple
+#WRITE_PERTURBATION=(1e-3)    # perturbation amplitude(s), space-separated for multiple
 EPSILON=1e-5            # weight-change threshold to count a weight as "changed"
 #DW=5e-5
 DW=2.5e-5

@@ -767,9 +767,9 @@ if __name__ == "__main__":
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
     # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
-    # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04_5e-04"
-    perturbation_string = "1e-03"
-    eps = 5e-6
+    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04_5e-04"
+    # perturbation_string = "1e-03"
+    eps = 1e-5
     label_noise_std = 0.0
     p_delta_flip = 0.0
     weight_noise_std = 0.0
@@ -789,30 +789,30 @@ if __name__ == "__main__":
     else:
         outpath = os.path.join(LOCAL_RESULTS_DIR, 'aggregate_plots', 'average_changed_weights_vs_perturbation_{}{}_eps{}.pdf'.format(perturbation_string, noise_suffix, eps))
 
-    # plot_average_changed_weights_vs_perturbation(
-    #     run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
-    #     repeats=[0, 2, 3, 4, 5, 6, 7, 8],
-    #     # repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
-    #     perturbation_str=perturbation_string,
-    #     out_path=outpath,
-    #     epsilon=eps,
-    #     label_noise_std=label_noise_std,
-    #     p_delta_flip=p_delta_flip,
-    #     weight_noise_std=weight_noise_std,
-    #     spring_noise_std=spring_noise_std,
-    #     legend_only=legend_only
-    # )
+    plot_average_changed_weights_vs_perturbation(
+        run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
+        # repeats=[0, 2, 3, 4, 5, 6, 7, 8],
+        repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
+        perturbation_str=perturbation_string,
+        out_path=outpath,
+        epsilon=eps,
+        label_noise_std=label_noise_std,
+        p_delta_flip=p_delta_flip,
+        weight_noise_std=weight_noise_std,
+        spring_noise_std=spring_noise_std,
+        legend_only=legend_only
+    )
 
     # Single run (r0)
     # plot_test_loss_vs_write_cycles(
     #     cyclic_dir=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32_r0/cyclic_memory_1e-03")
     # )
 
-    # Averaged over repeats
-    plot_initial_vs_final_test_loss_boxplot(
-        run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
-        data_dir=LOCAL_DATA_DIR,
-        repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
-        perturbation_str="1e-03",
-        spring_noise_std=spring_noise_std,
-    )
+    # # Averaged over repeats
+    # plot_initial_vs_final_test_loss_boxplot(
+    #     run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
+    #     data_dir=LOCAL_DATA_DIR,
+    #     repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
+    #     perturbation_str="1e-03",
+    #     spring_noise_std=spring_noise_std,
+    # )

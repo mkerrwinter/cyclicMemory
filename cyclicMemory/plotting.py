@@ -326,7 +326,7 @@ def plot_average_changed_weights_vs_perturbation(
 
     ax.set_xlabel("Perturbation size")
     ax.set_ylabel("Number of changed weights")
-    ax.legend(handles=handles, fontsize=8, loc="best")
+    # ax.legend(handles=handles, fontsize=8, loc="best")
     fig.tight_layout()
 
     if out_path is None:
@@ -558,17 +558,25 @@ def plot_initial_vs_final_test_loss_boxplot(
     rng = np.random.default_rng(seed)
     fig, ax = plt.subplots(figsize=(5, 5))
 
+    # Colours matching the viridis line plots of number of changed weights:
+    # the first (initial, 0 write cycles) and last (final, all write cycles)
+    # colours used in plot_average_changed_weights_vs_perturbation.
+    cmap = plt.cm.viridis
+    initial_colour = cmap(0.0)
+    final_colour = cmap(1.0)
+
     data = [initial_losses, final_losses]
     positions = [1, 2]
     ax.boxplot(data, positions=positions, widths=0.5, showfliers=False,
                patch_artist=True,
-               boxprops=dict(facecolor="lightgray", edgecolor="black"),
+               boxprops=dict(facecolor="none", edgecolor="black"),
                medianprops=dict(color="black"))
 
     # Jittered scatter of individual repeat values on top of each box
-    for pos, vals in zip(positions, data):
+    scatter_colours = [initial_colour, final_colour]
+    for pos, vals, colour in zip(positions, data, scatter_colours):
         x = pos + rng.uniform(-jitter, jitter, size=len(vals))
-        ax.scatter(x, vals, color="steelblue", edgecolor="black",
+        ax.scatter(x, vals, color=colour, edgecolor="black",
                    linewidth=0.3, s=25, zorder=5, alpha=0.8)
 
     ax.set_xticks(positions)
@@ -769,7 +777,7 @@ if __name__ == "__main__":
     # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
     perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04_5e-04"
     # perturbation_string = "1e-03"
-    eps = 1e-5
+    eps = 5e-6
     label_noise_std = 0.0
     p_delta_flip = 0.0
     weight_noise_std = 0.0
@@ -813,6 +821,6 @@ if __name__ == "__main__":
     #     run_base=os.path.join(LOCAL_RESULTS_DIR, "mnist_w10_lr0.01_B32"),
     #     data_dir=LOCAL_DATA_DIR,
     #     repeats=[0, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 38, 40, 41, 42, 43, 44, 45, 46, 47, 49],
-    #     perturbation_str="1e-03",
+    #     perturbation_str=perturbation_string,
     #     spring_noise_std=spring_noise_std,
     # )

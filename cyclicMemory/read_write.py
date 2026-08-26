@@ -304,7 +304,7 @@ def write_memory(
 
         if cycle <= 10:
             save_cycle(cycle)
-        elif cycle <= 20 * save_freq:
+        elif cycle <= 50 * save_freq:
             if cycle % save_freq == 0:
                 save_cycle(cycle)
         else:

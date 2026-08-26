@@ -76,11 +76,11 @@ SAVE_FREQ=10
 INPUT_DIM=10
 WIDTH=10
 DATA_DIR="/projects/prjs1487/python/cyclicMemory/data"
-START_CYCLE=180
+START_CYCLE=250
 LABEL_NOISE_STD=0.0
 P_DELTA_FLIP=0.0
-WEIGHT_NOISE_STD=0.0
-SPRING_NOISE_STD=1e-7
+WEIGHT_NOISE_STD=1e-6
+SPRING_NOISE_STD=0.0
 
 # SLURM resource settings
 # Set USE_GPU=true to submit to gpu_a100 (bills GPU SBUs); false for fat_rome (CPU SBUs).

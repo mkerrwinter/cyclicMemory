@@ -11,7 +11,7 @@ import os
 import csv
 import sys
 
-RESULTS_DIR = "/projects/prjs1487/python/cyclicMemory/snellius_results"
+RESULTS_DIR = os.path.join(os.environ.get("CYCLIC_MEMORY_PROJECT_BASE", "/path/to/cyclicMemory"), "snellius_results")
 THRESHOLD = 1e-7
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "summarise_logs_output.txt")
 

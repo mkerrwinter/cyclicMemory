@@ -14,7 +14,7 @@ from scipy.ndimage import gaussian_filter
 # ---------------------------------------------------------------------------
 # Hard-code output path here
 # ---------------------------------------------------------------------------
-OUTPUT_PATH = "/Users/maxkerrwinter/Documents/Manuscripts/MKW_LJ_cyclic_memory/draft_figures/images_for_figures/landscape_contour.pdf"
+OUTPUT_PATH = "figures/landscape_contour.pdf"
 
 # ---------------------------------------------------------------------------
 # Parameters

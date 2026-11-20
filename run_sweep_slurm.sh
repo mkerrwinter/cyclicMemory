@@ -19,7 +19,7 @@ LOG_EVERY=100
 N_TRAIN=5000
 N_TEST=1000
 INPUT_DIM=10
-RESULTS_DIR="/projects/prjs1487/python/cyclicMemory/snellius_results"
+RESULTS_DIR="${CYCLIC_MEMORY_PROJECT_BASE:?Set CYCLIC_MEMORY_PROJECT_BASE}/snellius_results"
 CONFIG_DIR="configs"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

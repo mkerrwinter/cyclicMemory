@@ -70,7 +70,7 @@ def migrate_file(csv_path: str, dry_run: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate read_memory CSVs to new two-file format.")
-    parser.add_argument("--directory", type=str, default="/projects/prjs1487/python/cyclicMemory/snellius_results/mnist_w10_lr0.01_B32_r8/cyclic_memory_5e-04_5e-04_5e-04_1e-03", help="Directory containing old-style CSV files.")
+    parser.add_argument("--directory", type=str, default=None, required=True, help="Directory containing old-style CSV files.")
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Show what would be done without writing any files.",

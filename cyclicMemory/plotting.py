@@ -17,6 +17,7 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib.ticker
 matplotlib.use('TkAgg')
 
 import torch
@@ -108,9 +109,13 @@ def plot_final_loss_vs_width(results_dir: str, out_path: str = None) -> None:
             markersize=6, label="geometric mean", zorder=5)
 
     ax.set_yscale("log")
-    ax.set_xlabel("Width")
-    ax.set_ylabel("Final training loss")
-    ax.legend(fontsize=8, loc="best")
+    ax.set_xticks([6, 8, 10])
+    ax.set_yticks([1e0, 1e-8, 1e-14])
+    ax.set_yticklabels([r"$10^0$", r"$10^{-8}$", r"$10^{-14}$"])
+    ax.set_xlabel("Width", fontsize=22)
+    ax.set_ylabel("Final training loss", fontsize=22)
+    ax.tick_params(axis="both", labelsize=22)
+    # ax.legend(fontsize=8, loc="best")
     fig.tight_layout()
 
     if out_path is None:
@@ -181,7 +186,7 @@ def plot_changed_weights_vs_perturbation(
         legend_handles = handles
 
     ax.set_xlabel("Perturbation size")
-    ax.set_ylabel("Number of changed weights")
+    ax.set_ylabel("N changed weights")
     ax.legend(handles=legend_handles, fontsize=8, loc="best")
     fig.tight_layout()
 
@@ -295,7 +300,17 @@ def plot_average_changed_weights_vs_perturbation(
         per_repeat_data[r] = repeat_data
         for n_cycles, (perturbations, n_changed) in repeat_data.items():
             all_data[n_cycles].append(n_changed)
-            perturbations_ref.setdefault(n_cycles, perturbations)
+            ref = perturbations_ref.setdefault(n_cycles, perturbations)
+            # Diagnostic: flag repeats whose number of rows differs from the first repeat
+            if len(n_changed) != len(ref):
+                print(f"  LENGTH MISMATCH: r{r}, cycles {n_cycles}: "
+                      f"{len(n_changed)} rows vs reference {len(ref)}")
+
+    # Diagnostic: summarise row counts per n_cycles across repeats
+    for n_cycles in sorted(all_data.keys()):
+        lengths = sorted({len(a) for a in all_data[n_cycles]})
+        if len(lengths) > 1:
+            print(f"  cycles {n_cycles}: inhomogeneous lengths {lengths}")
 
     if not all_data:
         print("No data found across any repeat.")
@@ -324,8 +339,19 @@ def plot_average_changed_weights_vs_perturbation(
                         linewidth=1.5, label=f"{n_cycles} write cycles")
         handles.append(line)
 
-    ax.set_xlabel("Perturbation size")
-    ax.set_ylabel("Number of changed weights")
+    ax.set_xticks([0, 0.0015])
+    ax.set_xticklabels(["0", r"0.0015"])
+    ax.set_yticks([0, 100, 200])
+    ax.axvline(1e-3, color="black", linestyle="--")
+    ax.text(1e-3, -0.08, r"$A$", transform=ax.get_xaxis_transform(),
+            ha="center", va="center", fontsize=28, math_fontfamily="cm")
+    # ax.axvline(5e-4, color="black", linestyle="--")
+    # ax.text(5e-4, -0.08, r"$A_1$", transform=ax.get_xaxis_transform(),
+    #         ha="center", va="center", fontsize=28, math_fontfamily="cm")
+    ax.set_xlabel(r"Probe amplitude, $\tilde{A}$", fontsize=22)
+    ax.set_ylabel("Changed weights", fontsize=22)
+    ax.tick_params(axis="both", labelsize=22)
+    ax.tick_params(axis="both", length=10, width=1.0)
     # ax.legend(handles=handles, fontsize=8, loc="best")
     fig.tight_layout()
 
@@ -582,8 +608,15 @@ def plot_initial_vs_final_test_loss_boxplot(
     ax.set_xticks(positions)
     ax.set_xticklabels(["Initial", "Final"])
     ax.set_xlim(0.5, 2.5)
-    ax.set_ylabel("Test loss")
+    ax.set_ylabel("Test loss", fontsize=22)
     ax.set_yscale("log")
+    ax.set_yticks([1e-2, 3e-2, 6e-2])
+    # ax.set_yticklabels([r"$10^{-2}$", r"$3\times10^{-2}$", r"$6\times10^{-2}$"])
+    ax.set_yticklabels([r"$0.01$", r"$0.03$", r"$0.06$"])
+    ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    ax.tick_params(axis="both", labelsize=22)
+    plt.setp(ax.get_yticklabels(), rotation=90, va="center")
+    plt.title('Without noise', fontsize=22)
     fig.tight_layout()
 
     if out_path is None:
@@ -775,13 +808,14 @@ if __name__ == "__main__":
 
     # --- Direct-call alternative (comment out main() above and uncomment below) ---
     # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04"
-    perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04_5e-04"
-    # perturbation_string = "1e-03"
+    # perturbation_string = "1e-03_5e-04_5e-04_5e-04_5e-04_5e-04_5e-04"
+    perturbation_string = "1e-03"
     eps = 5e-6
     label_noise_std = 0.0
     p_delta_flip = 0.0
-    weight_noise_std = 0.0
-    spring_noise_std = 1e-7
+    weight_noise_std = 1e-6
+    # spring_noise_std = 1e-7
+    spring_noise_std = 0.0
     legend_only = False
     noise_suffix = ""
     if label_noise_std != 0.0:
@@ -824,3 +858,5 @@ if __name__ == "__main__":
     #     perturbation_str=perturbation_string,
     #     spring_noise_std=spring_noise_std,
     # )
+
+    # plot_final_loss_vs_width(LOCAL_RESULTS_DIR, out_path=os.path.join(LOCAL_RESULTS_DIR, "aggregate_plots", "final_train_loss_vs_width.pdf"))
